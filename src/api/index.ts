@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 // ⚠️ ВАЖНО: Укажите здесь ВАШ IP адрес компьютера.
 // Если запускаете на реальном устройстве, localhost не сработает.
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'bank-super-app-production.up.railway.app';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bank-super-app-production.up.railway.app/';
 // http://192.168.1.3:8000
 export const api = axios.create({
   baseURL: BASE_URL,
