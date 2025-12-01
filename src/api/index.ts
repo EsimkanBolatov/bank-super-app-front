@@ -111,7 +111,7 @@ export const bankApi = {
     formData.append('password', password);
 
     return api.post('/auth/login', formData.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-uarlencoded' },
     });
   },
 
