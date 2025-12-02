@@ -139,9 +139,8 @@ export const bankApi = {
 
   // 3. ОПЕРАЦИИ
   getHistory: () => api.get('/transactions/'),
-  transferP2P: (amount: number, to_phone?: string, to_card?: string) =>
-    api.post('/transfers/p2p', { amount, to_phone, to_card }),
-
+  transferP2P: (amount: number, to_phone?: string, to_card?: string, from_account_id?: number) =>
+    api.post('/transfers/p2p', { amount, to_phone, to_card, from_account_id }),
   // 4. СЕРВИСЫ
 payService: (service_name: string, amount: number, details?: any) =>
     api.post('/services/pay', { service_name, amount, details }),
@@ -173,6 +172,13 @@ payService: (service_name: string, amount: number, details?: any) =>
   // 7. MFA
   generateMFA: () => api.post('/mfa/generate'),
   verifyMFA: (code: string) => api.post('/mfa/verify', { code }),
+
+  // 8. ИЗБРАННОЕ 
+  getFavorites: () => api.get('/transfers/favorites'),
+  addFavorite: (name: string, value: string, type: 'phone' | 'card') => 
+    api.post('/transfers/favorites', { name, value, type }),
+  deleteFavorite: (id: number) => api.delete(`/transfers/favorites/${id}`),
+
 };
 
 export default api;

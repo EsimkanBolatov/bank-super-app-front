@@ -125,7 +125,6 @@ export default function PaymentsScreen() {
     setContactsModalVisible(false);
   };
 
-  // --- ВОТ ЭТА ФУНКЦИЯ БЫЛА ПРОПУЩЕНА ---
   const handleSearchContact = (query: string) => {
     setSearchQuery(query);
     if (query) {
