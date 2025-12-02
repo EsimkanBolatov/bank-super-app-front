@@ -6,7 +6,7 @@ import { bankApi } from '../src/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Импортируем из новой библиотеки expo-audio
-import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
 export default function ChatScreen() {
@@ -20,12 +20,22 @@ export default function ChatScreen() {
     { id: 1, text: 'Привет! Нажми на микрофон и скажи: "Переведи 1000 тенге на 8700..."', isMe: false }
   ]);
 
-  // --- ИСПРАВЛЕНО: Передаем пресет напрямую ---
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
-  // Запрашиваем права при входе
   useEffect(() => {
     (async () => {
+      try {
+        // ИСПРАВЛЕНО: Используем новые кроссплатформенные названия свойств
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,        // Было playsInSilentModeIOS
+          shouldPlayInBackground: false,  // Было staysActiveInBackground
+        });
+      } catch (e) {
+        console.log("Ошибка настройки аудио:", e);
+      }
+
+      // Запрашиваем права
       const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) {
         Alert.alert('Ошибка', 'Нужен доступ к микрофону для голосового чата');
@@ -37,12 +47,12 @@ export default function ChatScreen() {
     try {
       if (audioRecorder.isRecording) return;
       
-      // Подготовка и старт записи
+      // Подготовка и старт
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
     } catch (err) {
       console.error('Failed to start recording', err);
-      Alert.alert("Ошибка", "Не удалось начать запись");
+      Alert.alert("Ошибка записи", "Не удалось начать запись. Проверьте права доступа.");
     }
   };
 
@@ -53,14 +63,11 @@ export default function ChatScreen() {
       setLoading(true);
       await audioRecorder.stop();
       
-      // Получаем файл
       const uri = audioRecorder.uri;
 
       if (uri) {
-          // Визуально добавляем сообщение
           setMessages(prev => [...prev, { id: Date.now(), text: "🎤 (Голосовое сообщение)", isMe: true }]);
 
-          // Отправляем на сервер
           try {
             const res = await bankApi.sendVoice(uri);
             handleAiResponse(res.data);
@@ -94,7 +101,6 @@ export default function ChatScreen() {
   const handleAiResponse = async (data: any) => {
       setMessages(prev => [...prev, { id: Date.now(), text: data.reply, isMe: false }]);
       
-      // Озвучка
       Speech.speak(data.reply, { language: 'ru' });
 
       if (data.action === 'transfer' && data.data) {
@@ -136,7 +142,6 @@ export default function ChatScreen() {
          {msg.length > 0 ? (
             <IconButton icon="send" iconColor={theme.colors.primary} onPress={sendTextMsg} />
          ) : (
-            // Кнопка микрофона
             <TouchableOpacity
                 onPressIn={startRecording}
                 onPressOut={stopRecording}
