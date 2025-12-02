@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Belly Bank",
-    "slug": "Belly Bank",
+    "slug": "my-bank",
     "scheme": "mybankapp",
     "version": "1.0.0",
     "orientation": "portrait",
