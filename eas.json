@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 7.0.0"
+    "version": ">= 16.0.0"
   },
   "build": {
     "development": {
@@ -8,6 +8,12 @@
       "distribution": "internal",
       "env": {
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
       }
     },
     "preview": {
@@ -23,14 +29,15 @@
       }
     },
     "production": {
+      "distribution": "store",
       "env": {
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
       "ios": {
-        "simulator": true
+        "simulator": false
       }
     }
   },

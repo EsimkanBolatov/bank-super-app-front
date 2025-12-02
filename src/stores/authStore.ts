@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       // Обновляем состояние и переходим на главный экран
       set({ token, isAuthenticated: true, isLoading: false });
-      router.replace('/app/tabs/tab_home');
+      router.replace('/tabs/tab_home');
 
     } catch (error) {
       console.error('Ошибка входа:', error);
