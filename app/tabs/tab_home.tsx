@@ -9,13 +9,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
+// --- 1. ОБНОВЛЕННЫЕ STORIES (В стиле Сервисов: Цвет + #455A64) ---
 const STORIES = [
-    { id: 1, title: 'Кэшбэк 10%', color: ['#FF9800', '#F57C00'] as const, icon: 'gift-outline' },
-    { id: 2, title: 'Belly Red', color: ['#F44336', '#D32F2F'] as const, icon: 'alpha-r-circle-outline' },
-    { id: 3, title: 'Автокредит', color: ['#2196F3', '#1976D2'] as const, icon: 'car-sports' },
-    { id: 4, title: 'Инвестиции', color: ['#4CAF50', '#388E3C'] as const, icon: 'chart-line' },
+    { id: 1, title: 'Кредиты', color: ['#667eea', '#764ba2'], icon: 'finance', route: '/credit' },
+    { id: 2, title: 'Belly Red', color: ['#F44336', '#D32F2F'], icon: 'alpha-r-circle-outline', route: '/credit' },
+    { id: 3, title: 'Инвестиции', color: ['#4CAF50', '#388E3C'], icon: 'chart-line', route: null },
+    { id: 4, title: 'Кэшбэк', color: ['#FF9800', '#F57C00'], icon: 'gift-outline', route: null },
 ];
-
 export default function Home() {
   const theme = useTheme();
   const router = useRouter();
@@ -100,11 +100,16 @@ export default function Home() {
     finally { setActionLoading(false); }
   };
 
+  // --- 2. ОБНОВЛЕННЫЕ QUICK ACTIONS (В стиле Сервисов) ---
   const quickActions = [
-    { icon: 'bank-transfer', label: 'Переводы', colors: ['#7B1FA2', '#4A148C'] as const, route: '/tabs/payments' },
-    { icon: 'qrcode-scan', label: 'QR', colors: ['#00897B', '#004D40'] as const, route: '/qr' },
-    { icon: 'history', label: 'История', colors: ['#FB8C00', '#EF6C00'] as const, route: '/history' },
-    { icon: 'robot', label: 'AI Чат', colors: ['#D81B60', '#880E4F'] as const, route: '/chat' },
+    // Переводы (Purple + DarkGrey)
+    { icon: 'bank-transfer', label: 'Переводы', colors: ['#673AB7', '#455A64'] as const, route: '/tabs/payments' },
+    // QR (Teal + DarkGrey)
+    { icon: 'qrcode-scan', label: 'QR', colors: ['#009688', '#455A64'] as const, route: '/qr' },
+    // История (Amber + DarkGrey)
+    { icon: 'history', label: 'История', colors: ['#FFC107', '#455A64'] as const, route: '/history' },
+    // AI Chat (Pink + DarkGrey)
+    { icon: 'robot', label: 'AI Чат', colors: ['#E91E63', '#455A64'] as const, route: '/chat' },
   ];
 
   if (loading && !refreshing) return <View style={styles.centerLoader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
@@ -130,16 +135,29 @@ export default function Home() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             showsVerticalScrollIndicator={false}
         >
+            {/* STORIES */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer}>
-                {STORIES.map((story) => (
-                    <TouchableOpacity key={story.id} style={styles.storyItem}>
-                        <LinearGradient colors={story.color} style={styles.storyCircle}>
-                            <MaterialCommunityIcons name={story.icon} size={28} color="white" />
-                        </LinearGradient>
-                        <Text style={styles.storyText}>{story.title}</Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+            {STORIES.map((story) => (
+                <TouchableOpacity 
+                    key={story.id} 
+                    style={styles.storyItem}
+                    onPress={() => {
+                        if (story.route) {
+                            router.push(story.route);
+                        }
+                    }}
+                    disabled={!story.route}
+                >
+                    <LinearGradient 
+                        colors={[story.color[0], story.color[1]]} 
+                        style={styles.storyCircle}
+                    >
+                        <MaterialCommunityIcons name={story.icon as any} size={28} color="white" />
+                    </LinearGradient>
+                    <Text style={styles.storyText}>{story.title}</Text>
+                </TouchableOpacity>
+            ))}
+        </ScrollView>
 
             <View style={styles.balanceContainer}>
                 <Text style={styles.balanceLabel}>Общий баланс</Text>
@@ -186,11 +204,16 @@ export default function Home() {
             </TouchableOpacity>
             </ScrollView>
 
+            {/* QUICK ACTIONS */}
             <View style={styles.actionsContainer}>
             {quickActions.map((action, index) => (
                 <TouchableOpacity key={index} style={styles.actionBtn} onPress={() => router.push(action.route as any)}>
-                    <LinearGradient colors={action.colors} style={styles.actionIcon} start={{x:0, y:0}} end={{x:1, y:1}}>
-                        <MaterialCommunityIcons name={action.icon} size={28} color="white" />
+                    <LinearGradient 
+                        colors={action.colors} 
+                        style={styles.actionIcon} 
+                        start={{x:0, y:0}} end={{x:1, y:1}} // Диагональный градиент как в сервисах
+                    >
+                        <MaterialCommunityIcons name={action.icon} size={30} color="white" />
                     </LinearGradient>
                     <Text style={styles.actionLabel}>{action.label}</Text>
                 </TouchableOpacity>
@@ -254,7 +277,21 @@ const styles = StyleSheet.create({
   avatarContainer: { elevation: 5, shadowColor:'#000', shadowOpacity:0.1, shadowRadius:5, borderRadius: 24 },
   storiesContainer: { paddingLeft: 20, marginBottom: 25 },
   storyItem: { alignItems: 'center', marginRight: 15, width: 75 },
-  storyCircle: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 6, elevation: 4 },
+  
+  // --- ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ ИКОНОК ---
+  storyCircle: { 
+      width: 64, height: 64, 
+      borderRadius: 22, // Squircle (как в сервисах)
+      justifyContent: 'center', alignItems: 'center', marginBottom: 6, 
+      elevation: 6, shadowColor: '#000', shadowOffset: {width:0, height:3}, shadowOpacity:0.3, shadowRadius:4.65 
+  },
+  actionIcon: { 
+      width: 64, height: 64, 
+      borderRadius: 22, // Squircle (как в сервисах)
+      justifyContent: 'center', alignItems: 'center', marginBottom: 8, 
+      elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4.65 
+  },
+  
   storyText: { fontSize: 11, textAlign: 'center', color: '#444' },
   balanceContainer: { paddingHorizontal: 20, marginBottom: 25 },
   balanceLabel: { color: '#666', fontSize: 15 },
@@ -271,8 +308,7 @@ const styles = StyleSheet.create({
   blockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   addCardBtn: { width: 60, height: 220, borderRadius: 24, borderStyle: 'dashed', borderWidth: 2, borderColor: '#ccc', justifyContent: 'center', alignItems: 'center', marginRight: 20, backgroundColor: 'rgba(255,255,255,0.5)' },
   actionsContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 35 },
-  actionBtn: { alignItems: 'center', width: '22%' },
-  actionIcon: { width: 64, height: 64, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  actionBtn: { alignItems: 'center', width: '23%' },
   actionLabel: { fontSize: 12, fontWeight: '600', color: '#444' },
   section: { paddingHorizontal: 20, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 30, paddingBottom: 50, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
