@@ -10,7 +10,7 @@ import '../src/i18n';
 export default function LoginScreen() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState('87472939873'); // Ваш тестовый номер
+  const [phone, setPhone] = useState('87472939873'); 
   const [password, setPassword] = useState('pass');
   const [code, setCode] = useState('');
   const [localLoading, setLocalLoading] = useState(false);
@@ -19,37 +19,31 @@ export default function LoginScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
 
-  // Шаг 1: Логин + Получение "Push" кода
+  // Хелпер для снятия фокуса (для Web)
+  const blurInputs = () => {
+    if (Platform.OS === 'web') {
+        (document.activeElement as HTMLElement)?.blur();
+    }
+  };
+
   const handleLoginStep1 = async () => {
+    blurInputs(); // Снимаем фокус перед запросом
     if (phone.length < 5) return alert('Введите номер');
     setLocalLoading(true);
     try {
-      // 1. Логин
       const response = await bankApi.login(phone, password);
       const accessToken = response.data.access_token;
-
-      // 2. Сохраняем токен
       await saveToken(accessToken);
-
-      // 3. Запрашиваем MFA
       const mfaRes = await bankApi.generateMFA();
       setStep(2);
 
-      // --- ЭМУЛЯЦИЯ PUSH УВЕДОМЛЕНИЯ ---
       if (mfaRes.data.demo_code) {
         if (Platform.OS === 'web') {
             alert(`💬 Ваш код: ${mfaRes.data.demo_code}`);
         } else {
-            Alert.alert(
-                "Сообщение (BellyBank)",
-                `Ваш код подтверждения: ${mfaRes.data.demo_code}`,
-                [{ text: "OK", onPress: () => console.log("Код получен") }]
-            );
+            Alert.alert("Сообщение", `Ваш код: ${mfaRes.data.demo_code}`);
         }
-      } else {
-        Alert.alert('Успех', 'Код отправлен (смотрите консоль)');
       }
-
     } catch (error: any) {
       console.error(error);
       alert(error.response?.data?.detail || 'Ошибка входа');
@@ -58,26 +52,22 @@ export default function LoginScreen() {
     }
   };
 
-  // Шаг 2: Проверка кода
   const handleVerifyCode = async () => {
+    blurInputs(); // Снимаем фокус перед переходом
     if (code.length < 4) return alert('Введите код');
     setLocalLoading(true);
 
     try {
       await bankApi.verifyMFA(code);
-
       const validToken = await getToken();
       if (!validToken) throw new Error("Токен не найден");
 
       await login(phone, validToken);
-
-      // --- ИСПРАВЛЕНИЕ: Убрали /app из пути ---
       router.replace('/tabs/tab_home');
 
     } catch (error: any) {
       console.error(error);
-      const msg = error.response?.data?.detail || 'Неверный код';
-      alert(msg);
+      alert(error.response?.data?.detail || 'Неверный код');
       if (error.message?.includes("Токен")) setStep(1);
     } finally {
       setLocalLoading(false);
@@ -104,7 +94,6 @@ export default function LoginScreen() {
                 Войти
               </Button>
 
-              {/* --- КНОПКА РЕГИСТРАЦИИ --- */}
               <View style={styles.registerContainer}>
                   <Text style={{color: '#666'}}>Нет аккаунта? </Text>
                   <TouchableOpacity onPress={() => router.push('/register')}>

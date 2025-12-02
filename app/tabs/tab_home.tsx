@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, RefreshControl, Alert } from 'react-native';
-import { useTheme, Avatar, Button, Modal, Portal, PaperProvider, ActivityIndicator } from 'react-native-paper';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, RefreshControl, Alert, Modal, Platform } from 'react-native';
+import { useTheme, Avatar, Button, ActivityIndicator } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { bankApi } from '../../src/api';
@@ -38,7 +38,7 @@ export default function Home() {
     return 'credit-card-outline';
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
         const [cardsRes, historyRes, profileRes] = await Promise.allSettled([
             bankApi.getCards(),
@@ -74,12 +74,12 @@ export default function Home() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [])
+    }, [fetchData])
   );
 
   const onRefresh = () => { setRefreshing(true); fetchData(); };
@@ -127,9 +127,31 @@ export default function Home() {
 
   if (loading && !refreshing) return <ActivityIndicator style={{marginTop: 50}} size="large" color={theme.colors.primary} />;
 
+  // --- КОНТЕНТ МОДАЛКИ (Один для всех платформ) ---
+  const renderModalContent = () => (
+    <View style={[styles.modalContent, {backgroundColor: theme.colors.background}]}>
+        <Text style={{fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: theme.colors.onSurface}}>
+            Карта *{selectedCard?.card_number?.slice(-4)}
+        </Text>
+
+        <Button
+            mode="contained"
+            icon={selectedCard?.is_blocked ? "lock-open" : "lock"}
+            buttonColor={selectedCard?.is_blocked ? "#4caf50" : "#f44336"}
+            onPress={toggleBlockCard}
+            loading={actionLoading}
+            style={{marginBottom: 10}}
+            contentStyle={{height: 50}}
+        >
+            {selectedCard?.is_blocked ? "Разблокировать" : "Заблокировать карту"}
+        </Button>
+
+        <Button mode="outlined" onPress={() => setCardModalVisible(false)}>Закрыть</Button>
+    </View>
+  );
+
   return (
-    <PaperProvider>
-        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
 
         <View style={styles.header}>
             <View>
@@ -221,29 +243,29 @@ export default function Home() {
             </View>
         </ScrollView>
 
-        <Portal>
-            <Modal visible={cardModalVisible} onDismiss={() => setCardModalVisible(false)} contentContainerStyle={[styles.modalContent, {backgroundColor: theme.colors.background}]}>
-                <Text style={{fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: theme.colors.onSurface}}>
-                    Карта *{selectedCard?.card_number?.slice(-4)}
-                </Text>
-
-                <Button
-                    mode="contained"
-                    icon={selectedCard?.is_blocked ? "lock-open" : "lock"}
-                    buttonColor={selectedCard?.is_blocked ? "#4caf50" : "#f44336"}
-                    onPress={toggleBlockCard}
-                    loading={actionLoading}
-                    style={{marginBottom: 10}}
-                    contentStyle={{height: 50}}
-                >
-                    {selectedCard?.is_blocked ? "Разблокировать" : "Заблокировать карту"}
-                </Button>
-
-                <Button mode="outlined" onPress={() => setCardModalVisible(false)}>Закрыть</Button>
+        {/* --- ГЛАВНОЕ ИСПРАВЛЕНИЕ: Разделение логики для Web и Native --- */}
+        {Platform.OS === 'web' ? (
+            // НА WEB: Обычное View (Оверлей) - никаких aria-hidden ошибок!
+            cardModalVisible && (
+                <View style={[styles.modalOverlay, StyleSheet.absoluteFill, { zIndex: 1000, position: 'fixed' as any }]}>
+                    {renderModalContent()}
+                </View>
+            )
+        ) : (
+            // НА ТЕЛЕФОНЕ: Нативный Modal
+            <Modal 
+                visible={cardModalVisible} 
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setCardModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    {renderModalContent()}
+                </View>
             </Modal>
-        </Portal>
-        </View>
-    </PaperProvider>
+        )}
+
+    </View>
   );
 }
 
@@ -270,5 +292,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
   transaction: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 16, marginBottom: 10 },
   tName: { fontSize: 16, fontWeight: '600' },
-  modalContent: { padding: 20, margin: 20, borderRadius: 20 }
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20, top: 0, left: 0, right: 0, bottom: 0 },
+  modalContent: { padding: 20, borderRadius: 20, width: '100%', maxWidth: 400, elevation: 5 }
 });

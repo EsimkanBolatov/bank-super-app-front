@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native'; // Добавили Platform
 import { Text, List, Switch, Button, Avatar, useTheme, Divider, SegmentedButtons, ActivityIndicator } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../src/stores/authStore';
@@ -41,11 +41,21 @@ export default function SettingsScreen() {
     i18n.changeLanguage(lang);
   };
 
+  // --- ИСПРАВЛЕНИЕ: Логика выхода для Web и Mobile ---
   const handleLogout = () => {
-    Alert.alert(t('settings_logout'), t('settings_logout_confirm'), [
-      { text: t('settings_cancel'), style: "cancel" },
-      { text: t('settings_logout'), style: "destructive", onPress: logout }
-    ]);
+    if (Platform.OS === 'web') {
+      // 1. Для ВЕБА: Используем нативное браузерное окно
+      const confirm = window.confirm(t('settings_logout_confirm'));
+      if (confirm) {
+        logout();
+      }
+    } else {
+      // 2. Для ТЕЛЕФОНА: Используем красивый Alert
+      Alert.alert(t('settings_logout'), t('settings_logout_confirm'), [
+        { text: t('settings_cancel'), style: "cancel" },
+        { text: t('settings_logout'), style: "destructive", onPress: logout }
+      ]);
+    }
   };
 
   const pickImage = async () => {
@@ -58,11 +68,11 @@ export default function SettingsScreen() {
 
     // 2. Открываем галерею
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // Используем строковый массив вместо Enum для надежности
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
-      base64: true, // Нам нужен base64, чтобы отправить на сервер
+      base64: true,
     });
 
     // 3. Если фото выбрано - отправляем
@@ -76,9 +86,13 @@ export default function SettingsScreen() {
         // Обновляем локально сразу, чтобы не ждать
         setProfile({ ...profile, avatar_url: base64Img });
 
-        Alert.alert("Успешно", "Фото профиля обновлено!");
+        if (Platform.OS === 'web') {
+            alert("Успешно: Фото профиля обновлено!");
+        } else {
+            Alert.alert("Успешно", "Фото профиля обновлено!");
+        }
       } catch (e) {
-        Alert.alert("Ошибка", "Не удалось обновить фото");
+        alert("Ошибка: Не удалось обновить фото");
       }
     }
   };
@@ -118,7 +132,7 @@ export default function SettingsScreen() {
         <List.Item
           title={t('settings_password')}
           left={props => <List.Icon {...props} icon="lock-reset" />}
-          onPress={() => Alert.alert("Пароль", "Функция смены пароля в разработке")}
+          onPress={() => alert("Функция смены пароля в разработке")}
         />
       </List.Section>
 

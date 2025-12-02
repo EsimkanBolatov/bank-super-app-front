@@ -1,20 +1,15 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
+import { saveToken, removeToken, getToken } from '../api'; 
 
-// Интерфейс для состояния авторизации
 interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  // ИСПРАВЛЕНО: Добавлен 'phone' в сигнатуру функции.
   login: (phone: string, token: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
-
-// Ключ для сохранения токена в защищенном хранилище (ТЗ: Шифрование данных)
-const TOKEN_KEY = 'user_jwt_secure';
 
 export const useAuthStore = create<AuthState>((set) => ({
   token: null,
@@ -22,16 +17,16 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   // Логика входа
-  // ИСПРАВЛЕНО: Добавлен 'phone' в аргументы.
   login: async (phone: string, token: string) => {
     try {
       set({ isLoading: true });
+      
+      // Используем универсальную функцию (работает везде)
+      await saveToken(token);
 
-      // ВЫПОЛНЯЕМ ТЗ: Шифруем токен при сохранении
-      await SecureStore.setItemAsync(TOKEN_KEY, token);
-
-      // Обновляем состояние и переходим на главный экран
       set({ token, isAuthenticated: true, isLoading: false });
+      
+      // Перенаправляем на главную
       router.replace('/tabs/tab_home');
 
     } catch (error) {
@@ -42,20 +37,34 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   // Логика выхода
   logout: async () => {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-    set({ token: null, isAuthenticated: false });
-    router.replace('/login');
+    try {
+      // 👇 ЭТО РЕШАЕТ ПРОБЛЕМУ НА ВЕБЕ
+      // removeToken сам поймет, удалить из localStorage или SecureStore
+      await removeToken();
+      
+      set({ token: null, isAuthenticated: false });
+      router.replace('/login');
+    } catch (error) {
+      console.error("Ошибка при выходе:", error);
+    }
   },
 
   // Проверка при запуске
   checkAuth: async () => {
     try {
-      const token = await SecureStore.getItemAsync(TOKEN_KEY);
+      set({ isLoading: true });
+      const token = await getToken();
+      
       if (token) {
+        // Если токен есть — авторизуем
         set({ token, isAuthenticated: true });
+      } else {
+        // Если токена нет — сбрасываем
+        set({ token: null, isAuthenticated: false });
       }
     } catch (error) {
       console.error('Ошибка проверки авторизации:', error);
+      set({ token: null, isAuthenticated: false });
     } finally {
       set({ isLoading: false });
     }

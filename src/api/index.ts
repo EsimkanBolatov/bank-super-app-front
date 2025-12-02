@@ -2,10 +2,9 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// ⚠️ ВАЖНО: Укажите здесь ВАШ IP адрес компьютера.
-// Если запускаете на реальном устройстве, localhost не сработает.
+// ⚠️ ВАЖНО: Укажите здесь ВАШ IP адрес компьютера или боевой URL.
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bank-super-app-production.up.railway.app/';
-// http://192.168.1.3:8000
+
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: {
@@ -20,7 +19,11 @@ const TOKEN_KEY = 'user_jwt_secure';
 export async function getToken() {
   try {
     if (Platform.OS === 'web') {
-      return localStorage.getItem(TOKEN_KEY);
+      // Проверяем наличие localStorage, чтобы избежать ошибок
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(TOKEN_KEY);
+      }
+      return null;
     } else {
       return await SecureStore.getItemAsync(TOKEN_KEY);
     }
@@ -33,7 +36,9 @@ export async function getToken() {
 export async function saveToken(token: string) {
   try {
     if (Platform.OS === 'web') {
-      localStorage.setItem(TOKEN_KEY, token);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(TOKEN_KEY, token);
+      }
     } else {
       await SecureStore.setItemAsync(TOKEN_KEY, token);
     }
@@ -46,7 +51,9 @@ export async function saveToken(token: string) {
 export async function removeToken() {
   try {
     if (Platform.OS === 'web') {
-      localStorage.removeItem(TOKEN_KEY);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(TOKEN_KEY);
+      }
     } else {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
     }
@@ -56,23 +63,23 @@ export async function removeToken() {
   }
 }
 
-// --- ИНТЕРЦЕПТОР ---
+// --- ИНТЕРЦЕПТОРЫ ---
 
-// Автоматическая подстановка токена (Bearer)
+// 1. Автоматическая подстановка токена в запросы
 api.interceptors.request.use(async (config) => {
   try {
-    // Не добавляем токен для запросов логина/регистрации
+    // Не добавляем токен для запросов логина/регистрации, чтобы не мусорить
     if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register')) {
       return config;
     }
 
     const token = await getToken();
 
-    // ЛОГИ ДЛЯ ОТЛАДКИ
+    // Логирование для отладки (можно убрать в продакшене)
     console.log(`[API Request] ➡️ ${config.method?.toUpperCase()} ${config.url}`);
 
-    if (token) {
-        // Приведение типов для headers, чтобы избежать ошибок TypeScript
+    if (token && config.headers) {
+        // Приведение типов для headers
         (config.headers as any).Authorization = `Bearer ${token}`;
     }
   } catch (error) {
@@ -81,20 +88,21 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Интерцептор для обработки ошибок
+// 2. Обработка ошибок (если токен протух)
 api.interceptors.response.use(
   (response) => {
-    console.log(`[API Response] ✅ ${response.status} ${response.config.url}`);
+    // console.log(`[API Response] ✅ ${response.status} ${response.config.url}`);
     return response;
   },
   async (error) => {
     if (error.response) {
       console.log(`[API Error] ❌ ${error.response.status} ${error.config?.url}`);
 
-      // Если 401 - значит токен протух или неверен
+      // Если сервер вернул 401 (Unauthorized), чистим токен
       if (error.response.status === 401) {
         console.log('Token expired or invalid. Clearing storage.');
         await removeToken();
+        // Здесь можно добавить логику редиректа, если вы используете events или navigate вне компонентов
       }
     } else {
       console.log(`[API Error] ❌ Network Error or no response: ${error.message}`);
@@ -102,6 +110,8 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// --- МЕТОДЫ API ---
 
 export const bankApi = {
   // 1. АВТОРИЗАЦИЯ
@@ -117,7 +127,7 @@ export const bankApi = {
 
   register: (data: any) => api.post('/auth/register', data),
 
-  // --- ПРОФИЛЬ (Настройки) ---
+  // --- ПРОФИЛЬ ---
   getMe: () => api.get('/settings/me'),
   updateProfile: (data: { full_name?: string; avatar_url?: string }) => api.patch('/settings/me', data),
 
@@ -136,14 +146,13 @@ export const bankApi = {
   payService: (service_name: string, amount: number) =>
     api.post('/services/pay', { service_name, amount }),
 
-  // 5. ИИ ЧАТ И ГОЛОСОВОЙ АССИСТЕНТ
-  // Текстовый чат
+  // 5. ИИ ЧАТ
   chatWithAI: (message: string) => api.post('/ai/chat', { message }),
 
-  // Голосовой чат (отправка файла)
+  // Голосовой чат (Для веба это может требовать доработки, но для мобилок работает)
   sendVoice: async (uri: string) => {
     const formData = new FormData();
-    // @ts-ignore: React Native требует специальный объект для файла, TS его не видит в стандартном FormData
+    // @ts-ignore
     formData.append('file', {
       uri: uri,
       name: 'voice.m4a',
