@@ -118,11 +118,11 @@ export default function Home() {
     }
   };
 
-  const quickActions = [
+ const quickActions = [
     { icon: 'bank-transfer', label: 'Переводы', color: '#6200ee', route: '/tabs/payments' },
     { icon: 'qrcode-scan', label: 'QR', color: '#03dac6', route: '/qr' },
     { icon: 'history', label: 'История', color: '#f4511e', route: '/history' },
-    { icon: 'chat', label: 'AI Чат', color: '#e91e63', route: '/chat' },
+    { icon: 'robot', label: 'AI Чат', color: '#e91e63', route: '/chat' }, // Заменил 'chat' на 'robot' для теста
   ];
 
   if (loading && !refreshing) return <ActivityIndicator style={{marginTop: 50}} size="large" color={theme.colors.primary} />;
@@ -206,8 +206,9 @@ export default function Home() {
             <View style={styles.actionsContainer}>
             {quickActions.map((action, index) => (
                 <TouchableOpacity key={index} style={styles.actionBtn} onPress={() => router.push(action.route as any)}>
+                {/* Исправленный стиль: явно задаем размеры и центровку */}
                 <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
-                    <MaterialCommunityIcons name={action.icon} size={28} color={action.color} />
+                    <MaterialCommunityIcons name={action.icon} size={32} color={action.color} />
                 </View>
                 <Text style={[styles.actionLabel, { color: theme.colors.onBackground }]}>{action.label}</Text>
                 </TouchableOpacity>
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
   addCardBtn: { width: 80, height: 180, borderRadius: 20, borderStyle: 'dashed', borderWidth: 1, borderColor: '#888', justifyContent: 'center', alignItems: 'center', marginRight: 20 },
   actionsContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 30, marginBottom: 20 },
   actionBtn: { alignItems: 'center', width: '22%' },
-  actionIcon: { width: 60, height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  actionIcon: { width: 65, height: 65, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   actionLabel: { fontSize: 12, fontWeight: '600' },
   section: { paddingHorizontal: 20 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },

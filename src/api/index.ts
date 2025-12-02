@@ -143,8 +143,8 @@ export const bankApi = {
     api.post('/transfers/p2p', { amount, to_phone, to_card }),
 
   // 4. СЕРВИСЫ
-  payService: (service_name: string, amount: number) =>
-    api.post('/services/pay', { service_name, amount }),
+payService: (service_name: string, amount: number, details?: any) =>
+    api.post('/services/pay', { service_name, amount, details }),
 
   // 5. ИИ ЧАТ
   chatWithAI: (message: string) => api.post('/ai/chat', { message }),
