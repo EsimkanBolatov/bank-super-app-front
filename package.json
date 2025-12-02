@@ -11,6 +11,7 @@
   "dependencies": {
     "axios": "^1.13.2",
     "expo": "~54.0.25",
+    "expo-audio": "~1.0.15",
     "expo-av": "~16.0.7",
     "expo-camera": "~17.0.9",
     "expo-constants": "~18.0.10",

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableOpacity, Modal, FlatList, TouchableWithoutFeedback, Keyboard, Image } from 'react-native';
-import { Text, TextInput, Button, useTheme, IconButton, Avatar, Searchbar, ActivityIndicator, Menu, Divider } from 'react-native-paper';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableOpacity, Modal, FlatList, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { Text, TextInput, Button, useTheme, IconButton, Searchbar, ActivityIndicator } from 'react-native-paper';
 import { bankApi } from '../../src/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
@@ -8,8 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRouter, useFocusEffect } from 'expo-router';
 
-interface Favorite { id: number; name: string; value: string; type: 'phone' | 'card'; color: readonly [string, string]; }
-
+// Страны для международных переводов
 const COUNTRIES = [
     { code: 'TR', name: 'Турция', flag: '🇹🇷' }, { code: 'UZ', name: 'Узбекистан', flag: '🇺🇿' },
     { code: 'KG', name: 'Кыргызстан', flag: '🇰🇬' }, { code: 'RU', name: 'Россия', flag: '🇷🇺' },
@@ -50,7 +49,7 @@ export default function PaymentsScreen() {
   const [newFavName, setNewFavName] = useState('');
   const [newFavValue, setNewFavValue] = useState('');
 
-  // --- DATA ---
+  // --- DATA LOADING ---
   const fetchInitialData = async () => {
       try {
           const cardsRes = await bankApi.getCards();
@@ -69,27 +68,24 @@ export default function PaymentsScreen() {
 
   useFocusEffect(useCallback(() => { fetchInitialData(); }, []));
 
-  // --- ИСПРАВЛЕННЫЙ ВВОД НОМЕРА (БЕЗ ГЛЮКОВ) ---
+  // --- ВВОД НОМЕРА ---
   const formatPhoneNumber = (text: string) => {
-    // 1. Удаляем всё кроме цифр
     let cleaned = text.replace(/\D/g, '');
     
-    // 2. Если пользователь стирает всё до "+7", даем ему это сделать
+    // Если пользователь стирает
     if (text === '+') { setReceiver(''); return; }
     if (text === '+7') { setReceiver('+7'); return; }
     
-    // 3. Если вставили номер или начали ввод (8.. или 7..)
-    // Нормализуем: убираем первую цифру кода страны, если она дублируется
+    // Нормализация (убираем дублирование 7 или 8 в начале)
     if (cleaned.length > 0) {
         if (cleaned.startsWith('7') || cleaned.startsWith('8')) {
             cleaned = cleaned.slice(1);
         }
     }
     
-    // Обрезаем лишнее (макс 10 цифр номера)
     if (cleaned.length > 10) cleaned = cleaned.slice(0, 10);
 
-    // 4. Формируем маску
+    // Маска
     let formatted = '+7';
     if (cleaned.length > 0) formatted += ' (' + cleaned.substring(0, 3);
     if (cleaned.length >= 4) formatted += ') ' + cleaned.substring(3, 6);
@@ -105,7 +101,7 @@ export default function PaymentsScreen() {
     setReceiver(formatted);
   };
 
-  // --- CONTACTS ---
+  // --- КОНТАКТЫ (ИСПРАВЛЕНО) ---
   const openContacts = async () => {
     setLoadingContacts(true);
     setContactsModalVisible(true);
@@ -113,25 +109,36 @@ export default function PaymentsScreen() {
       const { status } = await Contacts.requestPermissionsAsync();
       if (status === 'granted') {
         const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
-        const valid = data.filter((c: any) => c.phoneNumbers && c.phoneNumbers.length > 0 && c.name);
+        const valid = data
+            .filter((c: any) => c.phoneNumbers && c.phoneNumbers.length > 0 && c.name)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        
         setContacts(valid);
         setFilteredContacts(valid);
       } else {
-        Alert.alert("Ошибка", "Нет доступа к контактам");
+        Alert.alert("Ошибка", "Нет доступа к контактам. Проверьте настройки телефона.");
+        setContactsModalVisible(false);
       }
-    } catch (e) {} finally { setLoadingContacts(false); }
+    } catch (e) {
+        Alert.alert("Ошибка", "Не удалось открыть контакты");
+    } finally { 
+        setLoadingContacts(false); 
+    }
   };
 
   const handleContactSelect = (contact: any) => {
     let num = contact.phoneNumbers?.[0]?.number;
     if (!num) return;
-    // Просто чистим и передаем в форматтер
-    num = num.replace(/\D/g, '');
-    // Если номер длинный (с кодом страны), обрезаем последние 10 цифр
-    if (num.length >= 10) num = num.slice(-10);
     
-    // Эмулируем ввод
-    formatPhoneNumber('7' + num);
+    // Глубокая очистка номера от скобок, пробелов, +7, 8 и т.д.
+    let cleanNum = num.replace(/\D/g, '');
+    if (cleanNum.startsWith('7') || cleanNum.startsWith('8')) {
+        cleanNum = cleanNum.slice(1);
+    }
+    if (cleanNum.length > 10) cleanNum = cleanNum.slice(-10); // Берем последние 10 цифр
+
+    // Форматируем для UI
+    formatPhoneNumber('7' + cleanNum);
     setContactsModalVisible(false);
   };
 
@@ -141,7 +148,7 @@ export default function PaymentsScreen() {
       else setFilteredContacts(contacts.filter((c: any) => c.name.toLowerCase().includes(query.toLowerCase())));
   };
 
-  // --- ПЕРЕВОД ---
+  // --- ЛОГИКА ПЕРЕВОДА ---
   const openTransfer = (type: 'phone' | 'card' | 'own' | 'inter', initialValue?: string) => {
       setActiveTransferType(type);
       setReceiver(initialValue || (type === 'phone' ? '+7 (' : ''));
@@ -166,7 +173,6 @@ export default function PaymentsScreen() {
           } 
           else if (activeTransferType === 'phone') {
               let p = receiver.replace(/\D/g, ''); 
-              // Превращаем в 8... для бэка
               if (p.length === 11 && p.startsWith('7')) p = '8' + p.slice(1);
               if (p.length === 10) p = '8' + p;
               toPhone = p;
@@ -189,7 +195,7 @@ export default function PaymentsScreen() {
       }
   };
 
-  // --- FAVORITES CRUD ---
+  // --- CRUD ИЗБРАННОГО ---
   const handleAddFavorite = async () => {
       if (!newFavName || !newFavValue) return;
       try {
@@ -207,13 +213,13 @@ export default function PaymentsScreen() {
       } catch (e) {}
   };
 
-  // --- MENU ITEMS ---
+  // --- MENU ITEMS (ОБНОВЛЕННЫЕ ИКОНКИ) ---
   const menuItems = [
-      { title: "Между своими счетами", subtitle: "Мгновенно", icon: "cached", colors: ['#5C6BC0', '#3949AB'] as const, action: () => openTransfer('own') },
-      { title: "Клиенту Belly Bank", subtitle: "По номеру телефона", icon: "account", colors: ['#AB47BC', '#7B1FA2'] as const, action: () => openTransfer('phone') },
-      { title: "Карта другого банка", subtitle: "VISA / MasterCard", icon: "credit-card-outline", colors: ['#FF7043', '#E64A19'] as const, action: () => openTransfer('card') },
-      { title: "Международные переводы", subtitle: "На карту (Мир)", icon: "earth", colors: ['#26A69A', '#00897B'] as const, action: () => openTransfer('inter') },
-      { title: "QR Платежи", subtitle: "Сканируйте и платите", icon: "qrcode-scan", colors: ['#66BB6A', '#43A047'] as const, action: () => router.push('/qr') },
+      { title: "Между счетами", subtitle: "Мгновенно", icon: "cached", colors: ['#5C6BC0', '#3949AB'], action: () => openTransfer('own') },
+      { title: "Клиенту банка", subtitle: "По номеру телефона", icon: "account", colors: ['#AB47BC', '#7B1FA2'], action: () => openTransfer('phone') },
+      { title: "На карту", subtitle: "VISA / MasterCard", icon: "credit-card-outline", colors: ['#FF7043', '#E64A19'], action: () => openTransfer('card') },
+      { title: "За рубеж", subtitle: "SWIFT / Мир", icon: "earth", colors: ['#26A69A', '#00897B'], action: () => openTransfer('inter') },
+      { title: "QR Платежи", subtitle: "Сканируй и плати", icon: "qrcode-scan", colors: ['#66BB6A', '#43A047'], action: () => router.push('/qr') },
   ];
 
   return (
@@ -221,12 +227,12 @@ export default function PaymentsScreen() {
       <View style={styles.header}><Text style={styles.headerTitle}>Переводы</Text></View>
 
       <ScrollView contentContainerStyle={{paddingBottom: 50}}>
+          {/* ОБНОВЛЕННОЕ МЕНЮ */}
           <View style={styles.menuContainer}>
               {menuItems.map((item, index) => (
                   <TouchableOpacity key={index} style={styles.menuItem} onPress={item.action as any} activeOpacity={0.7}>
-                      {/* 1. ИСПРАВЛЕНО: flex: 1 для текста, чтобы стрелка была справа */}
-                      <LinearGradient colors={item.colors} style={styles.menuIconBg} start={{x:0, y:0}} end={{x:1, y:1}}>
-                          <MaterialCommunityIcons name={item.icon} size={24} color="white" />
+                      <LinearGradient colors={item.colors as any} style={styles.menuIconBg} start={{x:0, y:0}} end={{x:1, y:1}}>
+                          <MaterialCommunityIcons name={item.icon} size={28} color="white" />
                       </LinearGradient>
                       <View style={{flex:1, marginLeft: 15}}>
                           <Text style={styles.menuTitle}>{item.title}</Text>
@@ -239,7 +245,7 @@ export default function PaymentsScreen() {
 
           <View style={styles.favoritesSection}>
               <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
-                  <Text style={styles.sectionTitle}>Частые</Text>
+                  <Text style={styles.sectionTitle}>Избранное</Text>
                   <TouchableOpacity onPress={() => setIsEditingFavorites(!isEditingFavorites)}>
                       <Text style={{color: theme.colors.primary}}>{isEditingFavorites ? 'Готово' : 'Изменить'}</Text>
                   </TouchableOpacity>
@@ -268,120 +274,182 @@ export default function PaymentsScreen() {
           </View>
       </ScrollView>
 
-      {/* МОДАЛКА ПЕРЕВОДА */}
+      {/* --- МОДАЛКА ПЕРЕВОДА (ИСПРАВЛЕНАЯ) --- */}
       <Modal visible={transferModalVisible} transparent={true} animationType="slide" onRequestClose={() => setTransferModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.modalContent}>
                     <View style={styles.dragHandle} />
+                    
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>
                             {activeTransferType === 'phone' ? 'Клиенту банка' : activeTransferType === 'own' ? 'Между счетами' : activeTransferType === 'inter' ? 'Международный' : 'На карту'}
                         </Text>
-                        <IconButton icon="close" size={20} onPress={() => setTransferModalVisible(false)} />
+                        <IconButton icon="close" size={24} onPress={() => setTransferModalVisible(false)} style={{marginRight:-10}} />
                     </View>
-                    <ScrollView contentContainerStyle={{padding: 20}} keyboardShouldPersistTaps="handled">
+
+                    <ScrollView contentContainerStyle={{paddingHorizontal: 20, paddingBottom: 40}} keyboardShouldPersistTaps="handled">
                         
-                        {/* ОТКУДА */}
-                        <Text style={styles.label}>Списать с</Text>
+                        {/* 1. КАРТА СПИСАНИЯ */}
+                        <Text style={styles.label}>Откуда</Text>
                         <TouchableOpacity style={styles.cardSelector} onPress={() => {
                              if(myCards.length < 2) return;
                              const idx = myCards.indexOf(selectedSourceCard);
                              setSelectedSourceCard(myCards[(idx+1)%myCards.length]);
                         }}>
-                            <MaterialCommunityIcons name="credit-card" size={24} color="#3F51B5" />
-                            <View style={{marginLeft:10, flex:1}}>
-                                <Text style={{fontWeight:'bold'}}>{selectedSourceCard?.card_number ? `*${selectedSourceCard.card_number.slice(-4)}` : 'Выбрать'}</Text>
-                                <Text style={{color:'#666'}}>{Number(selectedSourceCard?.balance).toLocaleString()} {selectedSourceCard?.currency}</Text>
+                            <View style={styles.cardIconSmall}>
+                                <MaterialCommunityIcons name="credit-card" size={20} color="white" />
                             </View>
-                            <MaterialCommunityIcons name="chevron-down" size={20} color="#666" />
+                            <View style={{marginLeft:12, flex:1}}>
+                                <Text style={{fontWeight:'bold', fontSize: 16}}>
+                                    {selectedSourceCard?.card_number ? `*${selectedSourceCard.card_number.slice(-4)}` : 'Выбрать карту'}
+                                </Text>
+                                <Text style={{color:'#666'}}>
+                                    {selectedSourceCard ? `${Number(selectedSourceCard.balance).toLocaleString()} ${selectedSourceCard.currency}` : '0 ₸'}
+                                </Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
                         </TouchableOpacity>
 
-                        {/* КУДА (МЕЖДУ СВОИМИ) */}
+                        {/* 2. ПОЛЯ ПОЛУЧАТЕЛЯ */}
+                        <Text style={[styles.label, {marginTop: 20}]}>Кому</Text>
+
+                        {/* МЕЖДУ СВОИМИ */}
                         {activeTransferType === 'own' && (
-                             <TouchableOpacity style={[styles.cardSelector, {marginTop:10}]} onPress={() => {
+                             <TouchableOpacity style={styles.cardSelector} onPress={() => {
                                 if(myCards.length < 2) return;
                                 const idx = myCards.indexOf(selectedDestCard);
                                 setSelectedDestCard(myCards[(idx+1)%myCards.length]);
                            }}>
-                               <MaterialCommunityIcons name="wallet" size={24} color="#4CAF50" />
-                               <View style={{marginLeft:10, flex:1}}>
-                                   <Text style={{fontWeight:'bold'}}>{selectedDestCard?.card_number ? `*${selectedDestCard.card_number.slice(-4)}` : 'Выбрать'}</Text>
+                               <View style={[styles.cardIconSmall, {backgroundColor:'#4CAF50'}]}>
+                                    <MaterialCommunityIcons name="wallet" size={20} color="white" />
+                               </View>
+                               <View style={{marginLeft:12, flex:1}}>
+                                   <Text style={{fontWeight:'bold', fontSize: 16}}>{selectedDestCard?.card_number ? `*${selectedDestCard.card_number.slice(-4)}` : 'Выбрать'}</Text>
                                    <Text style={{color:'#666'}}>{Number(selectedDestCard?.balance).toLocaleString()} ₸</Text>
                                </View>
-                               <MaterialCommunityIcons name="chevron-down" size={20} color="#666" />
+                               <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
                            </TouchableOpacity>
                         )}
 
-                        {/* МЕЖДУНАРОДНЫЕ (СТРАНА) */}
+                        {/* МЕЖДУНАРОДНЫЕ */}
                         {activeTransferType === 'inter' && (
-                            <View style={{marginVertical: 10}}>
-                                <Text style={styles.label}>Страна получателя</Text>
+                            <View style={{marginBottom: 15}}>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{flexDirection:'row', marginBottom:10}}>
                                     {COUNTRIES.map(c => (
                                         <TouchableOpacity key={c.code} onPress={() => setSelectedCountry(c)} style={[styles.countryChip, selectedCountry.code === c.code && styles.countryChipActive]}>
-                                            <Text style={{fontSize:18, marginRight:5}}>{c.flag}</Text>
-                                            <Text>{c.name}</Text>
+                                            <Text style={{fontSize:20, marginRight:6}}>{c.flag}</Text>
+                                            <Text style={{fontWeight: selectedCountry.code === c.code ? 'bold' : 'normal'}}>{c.name}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>
+                                <TextInput label="Имя Фамилия (lat)" mode="outlined" value={interReceiverName} onChangeText={setInterReceiverName} style={styles.input} />
                             </View>
                         )}
 
-                        {/* ПОЛЯ ВВОДА */}
+                        {/* НОМЕР ТЕЛЕФОНА (КНОПКА КОНТАКТОВ ВЫНЕСЕНА) */}
                         {activeTransferType === 'phone' && (
-                            <TextInput 
-                                label="Телефон (+7...)" 
-                                mode="outlined" 
-                                value={receiver} 
-                                onChangeText={formatPhoneNumber} 
-                                keyboardType="phone-pad" 
-                                style={styles.input} 
-                                // ИСПРАВЛЕНО: Иконка контактов всегда видна
-                                right={<TextInput.Icon icon="account-box" onPress={openContacts}/>} 
-                            />
-                        )}
-                        {(activeTransferType === 'card' || activeTransferType === 'inter') && (
-                            <TextInput label="Номер карты получателя" mode="outlined" value={receiver} onChangeText={formatCardNumber} keyboardType="numeric" maxLength={19} style={styles.input} left={<TextInput.Icon icon="credit-card-outline" />} />
-                        )}
-                        {activeTransferType === 'inter' && (
-                            <TextInput label="Имя Фамилия (на латинице)" mode="outlined" value={interReceiverName} onChangeText={setInterReceiverName} style={styles.input} />
+                            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 10}}>
+                                <TextInput 
+                                    label="Телефон (+7...)" 
+                                    mode="outlined" 
+                                    value={receiver} 
+                                    onChangeText={formatPhoneNumber} 
+                                    keyboardType="phone-pad" 
+                                    style={[styles.input, {flex: 1, marginBottom: 0}]} 
+                                />
+                                <TouchableOpacity onPress={openContacts} style={styles.contactBtn}>
+                                    <MaterialCommunityIcons name="contacts" size={28} color="white" />
+                                </TouchableOpacity>
+                            </View>
                         )}
 
-                        <TextInput label="Сумма (₸)" mode="outlined" value={amount} onChangeText={setAmount} keyboardType="numeric" style={[styles.input, {marginTop: 10, backgroundColor:'#E8F5E9'}]} autoFocus={activeTransferType !== 'inter'} right={<TextInput.Icon icon="cash" />} />
-                        <Button mode="contained" onPress={handleTransfer} loading={loading} style={{marginTop: 20, borderRadius: 10}} contentStyle={{height: 50}}>Перевести</Button>
+                        {/* НОМЕР КАРТЫ */}
+                        {(activeTransferType === 'card' || activeTransferType === 'inter') && (
+                            <TextInput 
+                                label="Номер карты получателя" 
+                                mode="outlined" 
+                                value={receiver} 
+                                onChangeText={formatCardNumber} 
+                                keyboardType="numeric" 
+                                maxLength={19} 
+                                style={styles.input} 
+                                left={<TextInput.Icon icon="credit-card-outline" />} 
+                            />
+                        )}
+
+                        {/* 3. СУММА */}
+                        <Text style={[styles.label, {marginTop: 20}]}>Сумма</Text>
+                        <TextInput 
+                            mode="outlined" 
+                            value={amount} 
+                            onChangeText={setAmount} 
+                            keyboardType="numeric" 
+                            style={[styles.input, {backgroundColor:'#F1F8E9', fontSize: 18}]} 
+                            right={<TextInput.Icon icon="currency-kzt" />} 
+                            placeholder="0"
+                        />
+
+                        <Button 
+                            mode="contained" 
+                            onPress={handleTransfer} 
+                            loading={loading} 
+                            style={styles.payButton} 
+                            contentStyle={{height: 56}}
+                            labelStyle={{fontSize: 18, fontWeight: 'bold'}}
+                        >
+                            Перевести
+                        </Button>
+
                     </ScrollView>
                 </View>
             </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* MODAL: ADD FAVORITE */}
       <Modal visible={addFavoriteModalVisible} transparent={true} animationType="fade">
           <View style={styles.centerModalOverlay}>
               <View style={styles.centerModal}>
                   <Text style={{fontSize:18, fontWeight:'bold', marginBottom:15}}>Новый контакт</Text>
                   <TextInput label="Имя" mode="outlined" value={newFavName} onChangeText={setNewFavName} style={styles.input} />
-                  <TextInput label="Телефон (цифры)" mode="outlined" value={newFavValue} onChangeText={setNewFavValue} keyboardType="phone-pad" style={styles.input} />
-                  <View style={{flexDirection:'row', justifyContent:'flex-end', marginTop:10}}>
-                      <Button onPress={() => setAddFavoriteModalVisible(false)}>Отмена</Button>
-                      <Button onPress={handleAddFavorite}>Сохранить</Button>
+                  <TextInput label="Телефон" mode="outlined" value={newFavValue} onChangeText={setNewFavValue} keyboardType="phone-pad" style={styles.input} />
+                  <View style={{flexDirection:'row', justifyContent:'flex-end', marginTop:15}}>
+                      <Button onPress={() => setAddFavoriteModalVisible(false)} textColor="#666">Отмена</Button>
+                      <Button onPress={handleAddFavorite} mode="contained" style={{marginLeft:10}}>Сохранить</Button>
                   </View>
               </View>
           </View>
       </Modal>
 
+      {/* MODAL: CONTACTS LIST */}
       <Modal visible={contactsModalVisible} animationType="slide" presentationStyle="pageSheet">
-          <View style={{flex:1, backgroundColor:'white', padding:20}}>
-              <Searchbar placeholder="Поиск..." onChangeText={handleSearchContact} value={searchQuery} style={{marginBottom:20}} />
-              {loadingContacts ? <ActivityIndicator /> : (
-                  <FlatList data={filteredContacts} keyExtractor={(item:any) => item.id} renderItem={({item}) => (
-                        <TouchableOpacity style={{padding:15, borderBottomWidth:1, borderColor:'#eee'}} onPress={() => handleContactSelect(item)}>
-                            <Text style={{fontSize:16, fontWeight:'bold'}}>{item.name}</Text>
-                            <Text style={{color:'#666'}}>{item.phoneNumbers?.[0]?.number}</Text>
+          <View style={{flex:1, backgroundColor:'white', paddingTop: 20}}>
+              <View style={{paddingHorizontal: 20, marginBottom: 10}}>
+                  <Text style={{fontSize: 24, fontWeight: 'bold', marginBottom: 15}}>Контакты</Text>
+                  <Searchbar placeholder="Поиск..." onChangeText={handleSearchContact} value={searchQuery} style={{backgroundColor:'#f5f5f5'}} />
+              </View>
+              
+              {loadingContacts ? (
+                  <View style={{flex:1, justifyContent:'center'}}><ActivityIndicator size="large" /></View>
+              ) : (
+                  <FlatList 
+                    data={filteredContacts} 
+                    keyExtractor={(item:any) => item.id || Math.random().toString()} 
+                    renderItem={({item}) => (
+                        <TouchableOpacity style={styles.contactRow} onPress={() => handleContactSelect(item)}>
+                            <View style={styles.contactAvatar}>
+                                <Text style={{color:'white', fontWeight:'bold'}}>{item.name?.[0]}</Text>
+                            </View>
+                            <View>
+                                <Text style={{fontSize:16, fontWeight:'bold'}}>{item.name}</Text>
+                                <Text style={{color:'#666'}}>{item.phoneNumbers?.[0]?.number}</Text>
+                            </View>
                         </TouchableOpacity>
-                    )} />
+                    )} 
+                  />
               )}
-              <Button onPress={() => setContactsModalVisible(false)}>Закрыть</Button>
+              <Button mode="contained" onPress={() => setContactsModalVisible(false)} style={{margin: 20}}>Закрыть</Button>
           </View>
       </Modal>
     </View>
@@ -392,28 +460,43 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F9FC' },
   header: { padding: 20, alignItems: 'center', backgroundColor: 'white' },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color:'#111' },
-  menuContainer: { backgroundColor: 'white', borderRadius: 24, marginHorizontal: 15, paddingVertical: 10, elevation: 2, shadowColor:'#000', shadowOpacity:0.05, shadowRadius:5 },
+  
+  menuContainer: { backgroundColor: 'white', borderRadius: 24, marginHorizontal: 15, paddingVertical: 10, marginTop: 10, elevation: 2 },
   menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  menuIconBg: { width: 44, height: 44, borderRadius: 14, justifyContent:'center', alignItems:'center', marginRight: 16 },
-  menuTitle: { fontSize: 16, fontWeight: '600', color: '#222' },
+  // Исправленные стили иконок (живые)
+  menuIconBg: { width: 52, height: 52, borderRadius: 18, justifyContent:'center', alignItems:'center', marginRight: 16, elevation: 4 },
+  menuTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
   menuSubtitle: { fontSize: 13, color: '#888', marginTop: 2 },
-  favoritesSection: { marginTop: 10, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  
+  favoritesSection: { marginTop: 25, paddingHorizontal: 20 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   favItem: { alignItems: 'center', marginRight: 15, width: 70 },
   favAvatar: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 8, elevation:3 },
   favName: { fontSize: 11, textAlign: 'center', color:'#555' },
   deleteBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: 'red', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  
+  // Модалка перевода
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  // 2. ИСПРАВЛЕНО: Увеличенная высота модалки, чтобы не жалось
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '75%' }, 
-  dragHandle: { width: 40, height: 5, backgroundColor: '#E0E0E0', borderRadius: 3, alignSelf: 'center', marginTop: 10 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, alignItems:'center', borderBottomWidth:1, borderColor:'#eee' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
-  label: { color:'#666', marginBottom: 5, marginTop: 10 },
-  cardSelector: { flexDirection:'row', alignItems:'center', padding: 15, backgroundColor:'#F5F5F5', borderRadius: 12, borderWidth:1, borderColor:'#ddd' },
-  input: { marginBottom: 10, backgroundColor:'white' },
-  countryChip: { padding: 10, borderRadius: 20, backgroundColor: '#eee', marginRight: 10, flexDirection: 'row', alignItems: 'center' },
-  countryChipActive: { backgroundColor: '#C8E6C9', borderWidth: 1, borderColor: '#4CAF50' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '85%', paddingTop: 10 }, // Увеличили высоту
+  dragHandle: { width: 40, height: 5, backgroundColor: '#E0E0E0', borderRadius: 3, alignSelf: 'center', marginBottom: 10 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, alignItems:'center', marginBottom: 10 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold' },
+  
+  label: { color:'#666', marginBottom: 8, fontSize: 14, fontWeight: '600' },
+  cardSelector: { flexDirection:'row', alignItems:'center', padding: 16, backgroundColor:'#F5F7FA', borderRadius: 16, borderWidth:1, borderColor:'#E0E0E0' },
+  cardIconSmall: { width: 40, height: 26, backgroundColor:'#3949AB', borderRadius: 4, justifyContent:'center', alignItems:'center' },
+  
+  input: { marginBottom: 15, backgroundColor:'white' },
+  contactBtn: { width: 56, height: 56, backgroundColor: '#AB47BC', justifyContent:'center', alignItems:'center', borderRadius: 12, marginLeft: 10, marginTop: 5 },
+  
+  payButton: { marginTop: 10, borderRadius: 14, backgroundColor: '#6200EE' },
+  
+  countryChip: { padding: 12, borderRadius: 20, backgroundColor: '#F5F5F5', marginRight: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
+  countryChipActive: { backgroundColor: '#E0F2F1', borderColor: '#00897B' },
+  
   centerModalOverlay: { flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'rgba(0,0,0,0.5)' },
-  centerModal: { width:'80%', backgroundColor:'white', padding: 20, borderRadius: 15 }
+  centerModal: { width:'85%', backgroundColor:'white', padding: 25, borderRadius: 20, elevation: 10 },
+  
+  contactRow: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderColor: '#f0f0f0' },
+  contactAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#BDBDBD', justifyContent: 'center', alignItems: 'center', marginRight: 15 }
 });

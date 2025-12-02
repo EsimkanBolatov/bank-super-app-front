@@ -4,7 +4,9 @@ import { Text, useTheme, IconButton, Avatar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { bankApi } from '../src/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+
+// Импортируем из новой библиотеки expo-audio
+import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
 export default function ChatScreen() {
@@ -14,51 +16,63 @@ export default function ChatScreen() {
 
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<any[]>([
     { id: 1, text: 'Привет! Нажми на микрофон и скажи: "Переведи 1000 тенге на 8700..."', isMe: false }
   ]);
 
-  // Запись голоса
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  // --- ИСПРАВЛЕНО: Передаем пресет напрямую ---
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
+  // Запрашиваем права при входе
   useEffect(() => {
-    Audio.requestPermissionsAsync();
+    (async () => {
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      if (!status.granted) {
+        Alert.alert('Ошибка', 'Нужен доступ к микрофону для голосового чата');
+      }
+    })();
   }, []);
 
   const startRecording = async () => {
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-      setIsRecording(true);
+      if (audioRecorder.isRecording) return;
+      
+      // Подготовка и старт записи
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
     } catch (err) {
       console.error('Failed to start recording', err);
+      Alert.alert("Ошибка", "Не удалось начать запись");
     }
   };
 
   const stopRecording = async () => {
-    if (!recording) return;
-    setIsRecording(false);
-    setLoading(true);
+    if (!audioRecorder.isRecording) return;
+    
+    try {
+      setLoading(true);
+      await audioRecorder.stop();
+      
+      // Получаем файл
+      const uri = audioRecorder.uri;
 
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    setRecording(null);
+      if (uri) {
+          // Визуально добавляем сообщение
+          setMessages(prev => [...prev, { id: Date.now(), text: "🎤 (Голосовое сообщение)", isMe: true }]);
 
-    if (uri) {
-        // Добавляем визуальное сообщение
-        setMessages(prev => [...prev, { id: Date.now(), text: "🎤 (Голосовое сообщение)", isMe: true }]);
-
-        try {
           // Отправляем на сервер
-          const res = await bankApi.sendVoice(uri);
-          handleAiResponse(res.data);
-        } catch (e) {
-          setMessages(prev => [...prev, { id: Date.now()+1, text: "Ошибка распознавания", isMe: false }]);
-        } finally {
-          setLoading(false);
-        }
+          try {
+            const res = await bankApi.sendVoice(uri);
+            handleAiResponse(res.data);
+          } catch (e) {
+            console.error(e);
+            setMessages(prev => [...prev, { id: Date.now()+1, text: "Ошибка распознавания или связи", isMe: false }]);
+          }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -77,23 +91,17 @@ export default function ChatScreen() {
     } finally { setLoading(false); }
   };
 
-  // --- ГЛАВНАЯ ЛОГИКА ---
   const handleAiResponse = async (data: any) => {
-      // 1. Добавляем ответ в чат
       setMessages(prev => [...prev, { id: Date.now(), text: data.reply, isMe: false }]);
-
-      // 2. Озвучиваем голосом
+      
+      // Озвучка
       Speech.speak(data.reply, { language: 'ru' });
 
-      // 3. ВЫПОЛНЯЕМ ДЕЙСТВИЕ (если ИИ вернул команду)
       if (data.action === 'transfer' && data.data) {
           const { amount, phone } = data.data;
-
-          // Небольшая пауза для реалистичности
           setTimeout(async () => {
             try {
                 await bankApi.transferP2P(Number(amount), phone);
-
                 const successText = `✅ Перевод ${amount} ₸ выполнен успешно!`;
                 setMessages(prev => [...prev, { id: Date.now()+1, text: successText, isMe: false }]);
                 Speech.speak("Перевод выполнен успешно");
@@ -128,11 +136,11 @@ export default function ChatScreen() {
          {msg.length > 0 ? (
             <IconButton icon="send" iconColor={theme.colors.primary} onPress={sendTextMsg} />
          ) : (
-            // Кнопка микрофона (Нажать и держать или кликнуть старт/стоп)
+            // Кнопка микрофона
             <TouchableOpacity
                 onPressIn={startRecording}
                 onPressOut={stopRecording}
-                style={[styles.micBtn, { backgroundColor: isRecording ? 'red' : theme.colors.primary }]}
+                style={[styles.micBtn, { backgroundColor: audioRecorder.isRecording ? 'red' : theme.colors.primary }]}
             >
                 <Avatar.Icon size={50} icon="microphone" style={{backgroundColor:'transparent'}} />
             </TouchableOpacity>
