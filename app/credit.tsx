@@ -5,7 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { bankApi } from '../src/api';
+// ИСПРАВЛЕНИЕ 1: Добавлен импорт 'api' для прямых запросов
+import { bankApi, api } from '../src/api';
 
 // Типы продуктов
 type ProductType = 'cash' | 'installment' | 'bellyred' | 'mortgage' | 'auto' | 'deposit' | 'insurance';
@@ -122,7 +123,8 @@ export default function CreditScreen() {
                       selectedProduct === 'insurance' ? '/insurance/apply' : 
                       '/loans/apply';
 
-      await bankApi.post(endpoint, requestData);
+      // ИСПРАВЛЕНИЕ 1: Используем 'api.post' вместо 'bankApi.post'
+      await api.post(endpoint, requestData);
       
       if (Platform.OS === 'web') {
         alert('Успешно! Ваша заявка принята в обработку.');
@@ -317,7 +319,8 @@ export default function CreditScreen() {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={product.colors}
+                // ИСПРАВЛЕНИЕ 2: Приведение типа цветов для LinearGradient
+                colors={product.colors as [string, string, ...string[]]}
                 start={{x: 0, y: 0}}
                 end={{x: 1, y: 1}}
                 style={styles.productGradient}
