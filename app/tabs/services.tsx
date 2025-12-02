@@ -16,19 +16,19 @@ const { width, height } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
 const ITEM_WIDTH = width / COLUMN_COUNT;
 
-// --- КОНФИГУРАЦИЯ СТАНДАРТНЫХ ПЛАТЕЖЕЙ (Настройки полей) ---
+// --- КОНФИГУРАЦИЯ СТАНДАРТНЫХ ПЛАТЕЖЕЙ ---
 const SERVICE_CONFIG: any = {
   'Мобильный': { 
       type: 'mobile', 
       label: 'Выберите оператора',
       fields: ['phone', 'amount'], 
-      options: [ // Используем единый массив options для всех типов списков
+      options: [ 
           {value:'beeline', label:'Beeline'}, 
           {value:'kcell', label:'Kcell'}, 
           {value:'tele2', label:'Tele2'}, 
           {value:'altel', label:'Altel'}
       ],
-      optionKey: 'operator' // Ключ, куда записывать выбор
+      optionKey: 'operator'
   },
   'Коммуналка': { 
       type: 'utilities', 
@@ -77,6 +77,42 @@ const SERVICE_CONFIG: any = {
   'default': { type: 'generic', fields: ['text_input', 'amount'] }
 };
 
+// --- КОМПОНЕНТ ЦЕНТРАЛЬНОГО ОКНА (ВЫНЕСЕН НАРУЖУ) ---
+const CentralModal = ({ visible, onClose, title, icon, color, children }: any) => {
+    const theme = useTheme(); // Хук используется внутри компонента
+    return (
+        <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                style={styles.modalOverlay}
+            >
+                <TouchableWithoutFeedback onPress={onClose}>
+                    <View style={styles.backdrop} />
+                </TouchableWithoutFeedback>
+                
+                <View style={styles.centeredCard}>
+                    {/* Шапка окна с градиентом */}
+                    <LinearGradient 
+                        colors={[color || theme.colors.primary, '#263238']}
+                        start={{x:0, y:0}} end={{x:1, y:0}}
+                        style={styles.modalHeader}
+                    >
+                        <View style={{flexDirection:'row', alignItems:'center'}}>
+                            <MaterialCommunityIcons name={icon || 'wallet'} size={24} color="white" />
+                            <Text style={styles.modalTitle}>{title}</Text>
+                        </View>
+                        <IconButton icon="close" iconColor="white" size={20} onPress={onClose} style={{margin:0}} />
+                    </LinearGradient>
+
+                    <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+                        {children}
+                    </ScrollView>
+                </View>
+            </KeyboardAvoidingView>
+        </Modal>
+    );
+};
+
 export default function ServicesScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -112,7 +148,7 @@ export default function ServicesScreen() {
   const [activeEnvelopeId, setActiveEnvelopeId] = useState<number | null>(null);
   const [topUpAmount, setTopUpAmount] = useState('');
 
-  // Список сервисов (Названия должны совпадать с ключами в SERVICE_CONFIG!)
+  // Список сервисов
   const allServices = [
     // Фишки (SuperApp)
     { id: 'u1', name: 'Ortak (Split)', icon: 'account-group', color: '#FF5722', isSpecial: true, type: 'ortak' },
@@ -120,14 +156,14 @@ export default function ServicesScreen() {
     { id: 'u3', name: 'Eco Life', icon: 'tree', color: '#4CAF50', isSpecial: true, type: 'eco' },
     { id: 'u4', name: 'Мой Бюджет', icon: 'safe', color: '#3F51B5', isSpecial: true, type: 'budget' },
     
-    // Переводы (как одна иконка)
+    // Переводы
     { id: 'transfers', name: 'Переводы', icon: 'bank-transfer', color: '#6200EE', isSpecial: false, type: 'transfer_nav' },
 
     // Обычные сервисы
     { id: 1, name: 'Мобильный', icon: 'cellphone', color: '#F44336' },
     { id: 2, name: 'Коммуналка', icon: 'home-city', color: '#795548' },
     { id: 3, name: 'Транспорт', icon: 'bus', color: '#FF9800' },
-    { id: 4, name: 'Интернет и ТВ', icon: 'wifi', color: '#E91E63' }, // Исправлено название
+    { id: 4, name: 'Интернет и ТВ', icon: 'wifi', color: '#E91E63' },
     { id: 5, name: 'Образование', icon: 'school', color: '#4CAF50' },
     { id: 6, name: 'Штрафы', icon: 'gavel', color: '#607D8B' },
     { id: 10, name: 'Билеты', icon: 'ticket', color: '#F44336' },
@@ -138,14 +174,14 @@ export default function ServicesScreen() {
   ];
 
   const handlePress = (item: any) => {
-    // Навигация на переводы
     if (item.type === 'transfer_nav') {
         router.push('/tabs/payments');
         return;
     }
 
     setSelectedCategory(item);
-    // Инициализация формы дефолтными значениями (первый элемент списка)
+    
+    // Инициализация формы дефолтными значениями
     const conf = SERVICE_CONFIG[item.name];
     if (conf && conf.options && conf.options.length > 0) {
         setFormState({ [conf.optionKey]: conf.options[0].value });
@@ -208,11 +244,11 @@ export default function ServicesScreen() {
     }
   };
 
-  // --- ЯРКАЯ СЕТКА (GRADIENT) ---
+  // --- ЯРКАЯ СЕТКА ---
   const renderGridItem = ({ item }: { item: any }) => (
     <TouchableOpacity style={styles.gridItemContainer} onPress={() => handlePress(item)} activeOpacity={0.8}>
       <LinearGradient
-        colors={[item.color, '#455A64']} // Немного темнее во втором цвете для объема
+        colors={[item.color, '#455A64']}
         start={{x: 0, y: 0}} end={{x: 1, y: 1}}
         style={styles.iconBackground}
       >
@@ -228,48 +264,13 @@ export default function ServicesScreen() {
     </TouchableOpacity>
   );
 
-  // --- КОМПОНЕНТ ЦЕНТРАЛЬНОГО ОКНА ---
-  const CentralModal = ({ visible, onClose, title, icon, color, children }: any) => (
-    <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={styles.modalOverlay}
-        >
-            <TouchableWithoutFeedback onPress={onClose}>
-                <View style={styles.backdrop} />
-            </TouchableWithoutFeedback>
-            
-            <View style={styles.centeredCard}>
-                {/* Шапка окна с градиентом */}
-                <LinearGradient 
-                    colors={[color || theme.colors.primary, '#263238']}
-                    start={{x:0, y:0}} end={{x:1, y:0}}
-                    style={styles.modalHeader}
-                >
-                    <View style={{flexDirection:'row', alignItems:'center'}}>
-                        <MaterialCommunityIcons name={icon || 'wallet'} size={24} color="white" />
-                        <Text style={styles.modalTitle}>{title}</Text>
-                    </View>
-                    <IconButton icon="close" iconColor="white" size={20} onPress={onClose} style={{margin:0}} />
-                </LinearGradient>
-
-                <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
-                    {children}
-                </ScrollView>
-            </View>
-        </KeyboardAvoidingView>
-    </Modal>
-  );
-
-  // --- ДИНАМИЧЕСКИЕ ПОЛЯ ВВОДА (ГЛАВНАЯ ЛОГИКА) ---
   const renderDynamicFields = () => {
       const conf = SERVICE_CONFIG[selectedCategory?.name] || SERVICE_CONFIG['default'];
-      const activeOptionKey = conf.optionKey; // Например 'operator'
-      const activeValue = formState[activeOptionKey]; // Текущее значение
+      const activeOptionKey = conf.optionKey; 
+      const activeValue = formState[activeOptionKey]; 
 
       return (
           <View>
-              {/* Рендер Чипсов (Горизонтальный список) */}
               {conf.options && (
                   <View style={{marginBottom: 15}}>
                       <Text style={styles.fieldLabel}>{conf.label || 'Выберите:'}</Text>
@@ -292,7 +293,6 @@ export default function ServicesScreen() {
                   </View>
               )}
 
-              {/* Поля ввода в зависимости от конфига */}
               {conf.fields.includes('phone') && (
                   <TextInput label="Номер телефона" mode="outlined" keyboardType="phone-pad" 
                     value={formState.phone} onChangeText={t => setFormState({...formState, phone:t})} 
@@ -331,7 +331,7 @@ export default function ServicesScreen() {
               <TextInput label="Сумма платежа (₸)" mode="outlined" keyboardType="numeric" 
                 value={formState.amount} onChangeText={t => setFormState({...formState, amount:t})} 
                 style={[styles.input, {backgroundColor: '#F1F8E9'}]} 
-                right={<TextInput.Icon icon="currency-kzzt" />}
+                right={<TextInput.Icon icon="currency-kzt" />}
                 contentStyle={{fontWeight: 'bold', fontSize: 18, color: '#2E7D32'}}
               />
           </View>
@@ -416,8 +416,8 @@ export default function ServicesScreen() {
             renderItem={renderGridItem}
             keyExtractor={item => item.id.toString()}
             numColumns={COLUMN_COUNT}
-            scrollEnabled={false} // Чтобы скроллил внешний ScrollView
-            contentContainerStyle={{paddingHorizontal: 10, paddingTop: 10}} // paddingTop спасет от обрезания бейджиков!
+            scrollEnabled={false} 
+            contentContainerStyle={{paddingHorizontal: 10, paddingTop: 10}} 
         />
       </ScrollView>
 

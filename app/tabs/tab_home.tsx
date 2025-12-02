@@ -6,15 +6,25 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { bankApi } from '../../src/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Calendar, LocaleConfig } from 'react-native-calendars'; // ИМПОРТ КАЛЕНДАРЯ
+
+// Настройка русского языка для календаря
+LocaleConfig.locales['ru'] = {
+  monthNames: ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+  monthNamesShort: ['Янв.','Фев.','Март','Апр.','Май','Июнь','Июль','Авг.','Сент.','Окт.','Нояб.','Дек.'],
+  dayNames: ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'],
+  dayNamesShort: ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'],
+  today: "Сегодня"
+};
+LocaleConfig.defaultLocale = 'ru';
 
 const { width } = Dimensions.get('window');
 
 // --- СТОРИЗ (Stories) ---
-// Исправление: добавили 'as const', чтобы TS понимал, что это массив цветов
 const STORIES = [
     { id: 1, title: 'Кэшбэк 10%', color: ['#FF9800', '#F57C00'] as const, icon: 'gift-outline' },
-    { id: 2, title: 'Belly Red', color: ['#F44336', '#D32F2F'] as const, icon: 'alpha-r-circle-outline' },
-    { id: 3, title: 'Автокредит', color: ['#2196F3', '#1976D2'] as const, icon: 'car-sports' },
+    { id: 2, title: 'Belly Red', color: ['#F44336', '#D32F2F'] as const, icon: 'alpha-r-circle-outline', action: 'red' }, // Добавил action
+    { id: 3, title: 'Автокредит', color: ['#2196F3', '#1976D2'] as const, icon: 'car-sports', action: 'credit' },
     { id: 4, title: 'Инвестиции', color: ['#4CAF50', '#388E3C'] as const, icon: 'chart-line' },
 ];
 
@@ -26,18 +36,19 @@ export default function Home() {
   const [cards, setCards] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
-
-  const [userProfile, setUserProfile] = useState({
-    name: 'Пользователь',
-    avatar: null as string | null
-  });
+  const [userProfile, setUserProfile] = useState({ name: 'Пользователь', avatar: null as string | null });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [selectedCard, setSelectedCard] = useState<any>(null);
+  // Модалки
   const [cardModalVisible, setCardModalVisible] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<any>(null);
+  
+  // КАЛЕНДАРЬ
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarData, setCalendarData] = useState<any>({});
+  const [selectedDatePayment, setSelectedDatePayment] = useState<string | null>(null);
 
   const getTransactionIcon = (title: string, category?: string) => {
     const text = (title + " " + (category || "")).toLowerCase();
@@ -45,6 +56,7 @@ export default function Home() {
     if (text.includes('market') || text.includes('shop') || text.includes('magnum')) return 'cart';
     if (text.includes('coffee') || text.includes('starbucks')) return 'coffee';
     if (text.includes('transfer') || text.includes('перевод')) return 'bank-transfer';
+    if (text.includes('red') || text.includes('кредит')) return 'bank';
     return 'credit-card-outline';
   };
 
@@ -71,12 +83,23 @@ export default function Home() {
         }
 
         if (profileRes.status === 'fulfilled') {
-            const p = profileRes.value.data;
             setUserProfile({
-                name: p.full_name || 'Пользователь',
-                avatar: p.avatar_url
+                name: profileRes.value.data.full_name || 'Пользователь',
+                avatar: profileRes.value.data.avatar_url
             });
         }
+        
+        // Загрузка календаря (пытаемся, если бэкенд готов)
+        try {
+            // Внимание: Этот метод нужно добавить в api/index.ts, сейчас используем прямой fetch для теста или заглушку
+            // const calRes = await bankApi.getCalendar(); 
+            // Пока заглушка, чтобы фронт работал, пока вы обновляете бэкенд
+            const mockCalendar = {
+                '2025-12-10': {marked: true, dotColor: 'red', amount: 15000, type: 'Кредит'},
+                '2025-12-25': {marked: true, dotColor: '#D32F2F', amount: 5000, type: 'Belly Red'}
+            };
+            setCalendarData(mockCalendar);
+        } catch (e) {}
 
     } catch (error) {
       console.error("Ошибка обновления:", error);
@@ -86,13 +109,32 @@ export default function Home() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-    }, [fetchData])
-  );
-
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
   const onRefresh = () => { setRefreshing(true); fetchData(); };
+
+  // --- ЛОГИКА ОФОРМЛЕНИЯ КРЕДИТА/RED ---
+  const handleApplyProduct = async (type: string) => {
+      Alert.alert(
+          type === 'red' ? "Belly Red 0%" : "Кредит наличными",
+          type === 'red' ? "Оформить рассрочку 50 000 ₸ на 3 месяца?" : "Оформить кредит 100 000 ₸ на 12 месяцев?",
+          [
+              { text: "Отмена", style: "cancel" },
+              { text: "Оформить", onPress: async () => {
+                  try {
+                      setLoading(true);
+                      // Вызываем API (нужно добавить метод в api/index.ts)
+                      await bankApi.applyLoan(type === 'red' ? 50000 : 100000, type === 'red' ? 3 : 12, 150000); 
+                      Alert.alert("Успешно!", "Деньги зачислены на карту.");
+                      onRefresh();
+                  } catch (e) {
+                      Alert.alert("Ошибка", "Не удалось оформить.");
+                  } finally {
+                      setLoading(false);
+                  }
+              }}
+          ]
+      );
+  };
 
   const handleCreateCard = async () => {
     try {
@@ -107,31 +149,11 @@ export default function Home() {
     }
   };
 
-  const toggleBlockCard = async () => {
-    if (!selectedCard) return;
-    setActionLoading(true);
-    try {
-      if (selectedCard.is_blocked) {
-        await bankApi.unblockCard(selectedCard.id);
-        Alert.alert("Успешно", "Карта разблокирована ✅");
-      } else {
-        await bankApi.blockCard(selectedCard.id);
-        Alert.alert("Блокировка", "Карта временно заблокирована 🔒");
-      }
-      setCardModalVisible(false);
-      onRefresh();
-    } catch (e) {
-      Alert.alert("Ошибка", "Не удалось изменить статус карты");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   // --- 3D КНОПКИ БЫСТРЫХ ДЕЙСТВИЙ ---
-  // Исправление: добавили 'as const'
   const quickActions = [
     { icon: 'bank-transfer', label: 'Переводы', colors: ['#7B1FA2', '#4A148C'] as const, route: '/tabs/payments' },
-    { icon: 'qrcode-scan', label: 'QR', colors: ['#00897B', '#004D40'] as const, route: '/qr' },
+    // ЗАМЕНИЛИ QR НА КАЛЕНДАРЬ
+    { icon: 'calendar-clock', label: 'Календарь', colors: ['#00897B', '#004D40'] as const, action: () => setCalendarVisible(true) },
     { icon: 'history', label: 'История', colors: ['#FB8C00', '#EF6C00'] as const, route: '/history' },
     { icon: 'robot', label: 'AI Чат', colors: ['#D81B60', '#880E4F'] as const, route: '/chat' },
   ];
@@ -162,10 +184,14 @@ export default function Home() {
             showsVerticalScrollIndicator={false}
         >
             
-            {/* 2. STORIES */}
+            {/* 2. STORIES & OFFERS (Теперь кликабельные!) */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer}>
                 {STORIES.map((story) => (
-                    <TouchableOpacity key={story.id} style={styles.storyItem}>
+                    <TouchableOpacity 
+                        key={story.id} 
+                        style={styles.storyItem}
+                        onPress={() => story.action ? handleApplyProduct(story.action) : Alert.alert("Акция", story.title)}
+                    >
                         <LinearGradient colors={story.color} style={styles.storyCircle}>
                             <MaterialCommunityIcons name={story.icon} size={28} color="white" />
                         </LinearGradient>
@@ -185,25 +211,19 @@ export default function Home() {
             {cards.map((card) => (
                 <TouchableOpacity key={card.id} activeOpacity={0.9} onPress={() => { setSelectedCard(card); setCardModalVisible(true); }}>
                     <LinearGradient 
-                        // Исправление: as const для цветов карточки
                         colors={card.is_blocked ? ['#424242', '#212121'] as const : ['#303F9F', '#1A237E'] as const} 
                         start={{x:0, y:0}} end={{x:1, y:1}}
                         style={styles.card}
                     >
-                        {/* Верх: Название и PayWave */}
                         <View style={styles.cardHeader}>
                             <Text style={styles.cardBankName}>BELLY BANK</Text>
                             <MaterialCommunityIcons name="contactless-payment" size={28} color="rgba(255,255,255,0.8)" />
                         </View>
-                        
-                        {/* Середина: Номер карты (Крупно) */}
                         <View style={styles.cardNumberContainer}>
                             <Text style={styles.cardNumber}>
                                 {card.card_number ? card.card_number.toString().replace(/(\d{4})/g, '$1  ').trim() : '**** **** **** ****'}
                             </Text>
                         </View>
-
-                        {/* Низ: Баланс и Логотип Visa */}
                         <View style={styles.cardFooter}>
                             <View>
                                 <Text style={styles.cardLabel}>БАЛАНС</Text>
@@ -211,32 +231,24 @@ export default function Home() {
                             </View>
                             <Text style={{color:'white', fontWeight:'bold', fontStyle:'italic', fontSize: 24}}>VISA</Text>
                         </View>
-
-                        {card.is_blocked && (
-                            <View style={styles.blockedOverlay}>
-                                <MaterialCommunityIcons name="lock" size={40} color="#fff" />
-                                <Text style={{color:'white', fontWeight:'bold', marginTop:5}}>Заблокирована</Text>
-                            </View>
-                        )}
                     </LinearGradient>
                 </TouchableOpacity>
             ))}
-
             <TouchableOpacity style={styles.addCardBtn} onPress={handleCreateCard}>
                 <MaterialCommunityIcons name="plus" size={30} color="#888" />
                 <Text style={{ color: '#888', marginTop: 5, fontSize: 12 }}>Открыть</Text>
             </TouchableOpacity>
             </ScrollView>
 
-            {/* 5. 3D КНОПКИ */}
+            {/* 5. 3D КНОПКИ (С Календарем) */}
             <View style={styles.actionsContainer}>
             {quickActions.map((action, index) => (
-                <TouchableOpacity key={index} style={styles.actionBtn} onPress={() => router.push(action.route as any)}>
-                    <LinearGradient 
-                        colors={action.colors} 
-                        style={styles.actionIcon}
-                        start={{x:0, y:0}} end={{x:1, y:1}}
-                    >
+                <TouchableOpacity 
+                    key={index} 
+                    style={styles.actionBtn} 
+                    onPress={() => action.route ? router.push(action.route as any) : action.action && action.action()}
+                >
+                    <LinearGradient colors={action.colors} style={styles.actionIcon} start={{x:0, y:0}} end={{x:1, y:1}}>
                         <MaterialCommunityIcons name={action.icon} size={28} color="white" />
                     </LinearGradient>
                     <Text style={styles.actionLabel}>{action.label}</Text>
@@ -250,17 +262,10 @@ export default function Home() {
                     <Text style={styles.sectionTitle}>Последние операции</Text>
                     <TouchableOpacity onPress={() => router.push('/history')}><Text style={{color: theme.colors.primary, fontWeight:'600'}}>Все</Text></TouchableOpacity>
                 </View>
-                
-                {transactions.length === 0 && <Text style={{color:'#999', paddingVertical:10}}>Нет операций</Text>}
-
                 {transactions.slice(0, 5).map((t) => (
                     <TouchableOpacity key={t.id} style={styles.transactionRow}>
                         <View style={[styles.transactionIconBg, {backgroundColor: t.type === 'income' ? '#E8F5E9' : '#EDE7F6'}]}>
-                            <MaterialCommunityIcons 
-                                name={t.icon} 
-                                size={24} 
-                                color={t.type === 'income' ? '#4CAF50' : '#673AB7'} 
-                            />
+                            <MaterialCommunityIcons name={t.icon} size={24} color={t.type === 'income' ? '#4CAF50' : '#673AB7'} />
                         </View>
                         <View style={styles.transactionInfo}>
                             <Text style={styles.transactionTitle}>{t.title || t.category || "Перевод"}</Text>
@@ -274,28 +279,44 @@ export default function Home() {
             </View>
         </ScrollView>
 
-        {/* МОДАЛКА УПРАВЛЕНИЯ КАРТОЙ */}
-        <Modal visible={cardModalVisible} transparent={true} animationType="fade" onRequestClose={() => setCardModalVisible(false)}>
+        {/* --- МОДАЛКА КАЛЕНДАРЯ --- */}
+        <Modal visible={calendarVisible} transparent={true} animationType="slide" onRequestClose={() => setCalendarVisible(false)}>
             <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Карта *{selectedCard?.card_number?.slice(-4)}</Text>
-                    <Text style={{color:'#666', marginBottom:20, textAlign:'center'}}>
-                        {selectedCard?.is_blocked ? "Карта заблокирована. Операции недоступны." : "Вы можете временно заблокировать карту, если потеряли её."}
-                    </Text>
+                <View style={styles.calendarModalContent}>
+                    <View style={styles.calendarHeader}>
+                        <Text style={{fontSize: 20, fontWeight: 'bold'}}>Финансовый календарь</Text>
+                        <IconButton icon="close" onPress={() => setCalendarVisible(false)} />
+                    </View>
+                    
+                    <Calendar 
+                        theme={{
+                            todayTextColor: theme.colors.primary,
+                            arrowColor: theme.colors.primary,
+                            dotColor: 'red',
+                            selectedDayBackgroundColor: theme.colors.primary
+                        }}
+                        markedDates={calendarData}
+                        onDayPress={(day: any) => {
+                            const event = calendarData[day.dateString];
+                            if(event) {
+                                setSelectedDatePayment(`Дата: ${day.dateString}\nПлатеж: ${event.type}\nСумма: ${event.amount} ₸`);
+                            } else {
+                                setSelectedDatePayment(null);
+                            }
+                        }}
+                    />
 
-                    <Button
-                        mode="contained"
-                        icon={selectedCard?.is_blocked ? "lock-open" : "lock"}
-                        buttonColor={selectedCard?.is_blocked ? "#4caf50" : "#f44336"}
-                        onPress={toggleBlockCard}
-                        loading={actionLoading}
-                        style={{marginBottom: 10, width:'100%'}}
-                        contentStyle={{height: 50}}
-                    >
-                        {selectedCard?.is_blocked ? "Разблокировать" : "Заблокировать"}
-                    </Button>
-
-                    <Button mode="outlined" onPress={() => setCardModalVisible(false)} style={{width:'100%'}}>Закрыть</Button>
+                    <View style={styles.calendarFooter}>
+                        {selectedDatePayment ? (
+                            <View style={{backgroundColor: '#FFEBEE', padding: 15, borderRadius: 10, width: '100%'}}>
+                                <Text style={{color: '#D32F2F', fontWeight: 'bold', fontSize: 16}}>Предстоящий платеж</Text>
+                                <Text style={{marginTop: 5, fontSize: 14, lineHeight: 20}}>{selectedDatePayment}</Text>
+                                <Button mode="contained" style={{marginTop: 10, backgroundColor: '#D32F2F'}} onPress={() => Alert.alert("Оплата", "Переход к оплате...")}>Оплатить сейчас</Button>
+                            </View>
+                        ) : (
+                            <Text style={{color:'#888', marginTop: 20}}>Выберите дату с точкой, чтобы увидеть платеж.</Text>
+                        )}
+                    </View>
                 </View>
             </View>
         </Modal>
@@ -327,29 +348,14 @@ const styles = StyleSheet.create({
 
   // Cards
   cardsScroll: { paddingLeft: 20, paddingRight: 20, marginBottom: 30 },
-  card: { 
-      width: width * 0.85, 
-      height: 220, 
-      borderRadius: 24, 
-      padding: 25, 
-      marginRight: 15, 
-      justifyContent: 'space-between', 
-      elevation: 12, 
-      shadowColor: "#1A237E", 
-      shadowOffset: { width: 0, height: 8 }, 
-      shadowOpacity: 0.4, 
-      shadowRadius: 10 
-  },
+  card: { width: width * 0.85, height: 220, borderRadius: 24, padding: 25, marginRight: 15, justifyContent: 'space-between', elevation: 12, shadowColor: "#1A237E", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 10 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardBankName: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
-  
   cardNumberContainer: { justifyContent: 'center', flex: 1 },
   cardNumber: { color: '#fff', fontSize: 24, letterSpacing: 2, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 2 },
-  
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   cardLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, textTransform: 'uppercase', marginBottom: 2 },
   cardBalance: { color: '#fff', fontSize: 26, fontWeight: 'bold' }, 
-  
   blockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   addCardBtn: { width: 60, height: 220, borderRadius: 24, borderStyle: 'dashed', borderWidth: 2, borderColor: '#ccc', justifyContent: 'center', alignItems: 'center', marginRight: 20, backgroundColor: 'rgba(255,255,255,0.5)' },
 
@@ -363,7 +369,6 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 30, paddingBottom: 50, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#222' },
-  
   transactionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   transactionIconBg: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   transactionInfo: { flex: 1 },
@@ -371,8 +376,13 @@ const styles = StyleSheet.create({
   transactionDate: { fontSize: 12, color: '#999', marginTop: 3 },
   transactionAmount: { fontSize: 16, fontWeight: 'bold' },
 
-  // Modal
+  // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: 'white', borderRadius: 24, padding: 25, width: '100%', maxWidth: 350, alignItems: 'center', elevation: 10 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 }
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+  
+  // Calendar Modal
+  calendarModalContent: { backgroundColor: 'white', borderRadius: 24, padding: 20, width: '100%', height: '70%' },
+  calendarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  calendarFooter: { marginTop: 20, alignItems: 'center' }
 });
