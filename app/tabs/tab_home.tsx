@@ -1,15 +1,27 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, RefreshControl, Alert, Modal, Platform } from 'react-native';
-import { useTheme, Avatar, Button, ActivityIndicator } from 'react-native-paper';
+import { useTheme, Avatar, Button, ActivityIndicator, IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { bankApi } from '../../src/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
+
+// --- СТОРИЗ (Stories) ---
+// Исправление: добавили 'as const', чтобы TS понимал, что это массив цветов
+const STORIES = [
+    { id: 1, title: 'Кэшбэк 10%', color: ['#FF9800', '#F57C00'] as const, icon: 'gift-outline' },
+    { id: 2, title: 'Belly Red', color: ['#F44336', '#D32F2F'] as const, icon: 'alpha-r-circle-outline' },
+    { id: 3, title: 'Автокредит', color: ['#2196F3', '#1976D2'] as const, icon: 'car-sports' },
+    { id: 4, title: 'Инвестиции', color: ['#4CAF50', '#388E3C'] as const, icon: 'chart-line' },
+];
 
 export default function Home() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [cards, setCards] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -29,12 +41,10 @@ export default function Home() {
 
   const getTransactionIcon = (title: string, category?: string) => {
     const text = (title + " " + (category || "")).toLowerCase();
-    if (text.includes('taxi') || text.includes('яндекс') || text.includes('uber')) return 'taxi';
-    if (text.includes('bus') || text.includes('transport') || text.includes('proezd')) return 'bus';
-    if (text.includes('itu') || text.includes('univer') || text.includes('tuition')) return 'school';
-    if (text.includes('eco') || text.includes('tree')) return 'tree';
-    if (text.includes('magnum') || text.includes('market') || text.includes('shop')) return 'cart';
-    if (text.includes('starbucks') || text.includes('coffee')) return 'coffee';
+    if (text.includes('taxi') || text.includes('яндекс')) return 'taxi';
+    if (text.includes('market') || text.includes('shop') || text.includes('magnum')) return 'cart';
+    if (text.includes('coffee') || text.includes('starbucks')) return 'coffee';
+    if (text.includes('transfer') || text.includes('перевод')) return 'bank-transfer';
     return 'credit-card-outline';
   };
 
@@ -111,188 +121,258 @@ export default function Home() {
       setCardModalVisible(false);
       onRefresh();
     } catch (e) {
-      console.error(e);
       Alert.alert("Ошибка", "Не удалось изменить статус карты");
     } finally {
       setActionLoading(false);
     }
   };
 
- const quickActions = [
-    { icon: 'bank-transfer', label: 'Переводы', color: '#6200ee', route: '/tabs/payments' },
-    { icon: 'qrcode-scan', label: 'QR', color: '#03dac6', route: '/qr' },
-    { icon: 'history', label: 'История', color: '#f4511e', route: '/history' },
-    { icon: 'robot', label: 'AI Чат', color: '#e91e63', route: '/chat' }, // Заменил 'chat' на 'robot' для теста
+  // --- 3D КНОПКИ БЫСТРЫХ ДЕЙСТВИЙ ---
+  // Исправление: добавили 'as const'
+  const quickActions = [
+    { icon: 'bank-transfer', label: 'Переводы', colors: ['#7B1FA2', '#4A148C'] as const, route: '/tabs/payments' },
+    { icon: 'qrcode-scan', label: 'QR', colors: ['#00897B', '#004D40'] as const, route: '/qr' },
+    { icon: 'history', label: 'История', colors: ['#FB8C00', '#EF6C00'] as const, route: '/history' },
+    { icon: 'robot', label: 'AI Чат', colors: ['#D81B60', '#880E4F'] as const, route: '/chat' },
   ];
 
-  if (loading && !refreshing) return <ActivityIndicator style={{marginTop: 50}} size="large" color={theme.colors.primary} />;
-
-  // --- КОНТЕНТ МОДАЛКИ (Один для всех платформ) ---
-  const renderModalContent = () => (
-    <View style={[styles.modalContent, {backgroundColor: theme.colors.background}]}>
-        <Text style={{fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: theme.colors.onSurface}}>
-            Карта *{selectedCard?.card_number?.slice(-4)}
-        </Text>
-
-        <Button
-            mode="contained"
-            icon={selectedCard?.is_blocked ? "lock-open" : "lock"}
-            buttonColor={selectedCard?.is_blocked ? "#4caf50" : "#f44336"}
-            onPress={toggleBlockCard}
-            loading={actionLoading}
-            style={{marginBottom: 10}}
-            contentStyle={{height: 50}}
-        >
-            {selectedCard?.is_blocked ? "Разблокировать" : "Заблокировать карту"}
-        </Button>
-
-        <Button mode="outlined" onPress={() => setCardModalVisible(false)}>Закрыть</Button>
-    </View>
-  );
+  if (loading && !refreshing) return <View style={styles.centerLoader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: '#F5F7FA', paddingTop: insets.top }]}>
 
+        {/* 1. HEADER */}
         <View style={styles.header}>
             <View>
-                <Text style={{ color: '#888', fontSize: 14 }}>Добрый день,</Text>
-                <Text style={{ color: theme.colors.onBackground, fontSize: 24, fontWeight: 'bold' }}>
-                    {userProfile.name} 👋
-                </Text>
+                <Text style={styles.greetingText}>Добрый день,</Text>
+                <Text style={styles.userNameText}>{userProfile.name.split(' ')[0]} 👋</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push('/settings')}>
+            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.avatarContainer}>
                 {userProfile.avatar ? (
-                    <Avatar.Image size={45} source={{ uri: userProfile.avatar }} />
+                    <Avatar.Image size={48} source={{ uri: userProfile.avatar }} />
                 ) : (
-                    <Avatar.Text size={45} label={userProfile.name[0] || "U"} />
+                    <Avatar.Text size={48} label={userProfile.name[0] || "U"} style={{backgroundColor: theme.colors.primary}} />
                 )}
             </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-            <View style={styles.totalBalance}>
-            <Text style={{ color: '#888' }}>Общий баланс</Text>
-            <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.colors.onBackground }}>{totalBalance.toLocaleString()} ₸</Text>
+        <ScrollView 
+            contentContainerStyle={{ paddingBottom: 100 }} 
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+            showsVerticalScrollIndicator={false}
+        >
+            
+            {/* 2. STORIES */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer}>
+                {STORIES.map((story) => (
+                    <TouchableOpacity key={story.id} style={styles.storyItem}>
+                        <LinearGradient colors={story.color} style={styles.storyCircle}>
+                            <MaterialCommunityIcons name={story.icon} size={28} color="white" />
+                        </LinearGradient>
+                        <Text style={styles.storyText}>{story.title}</Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            {/* 3. ОБЩИЙ БАЛАНС */}
+            <View style={styles.balanceContainer}>
+                <Text style={styles.balanceLabel}>Общий баланс</Text>
+                <Text style={styles.balanceValue}>{totalBalance.toLocaleString()} ₸</Text>
             </View>
 
+            {/* 4. КАРТЫ */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardsScroll}>
             {cards.map((card) => (
                 <TouchableOpacity key={card.id} activeOpacity={0.9} onPress={() => { setSelectedCard(card); setCardModalVisible(true); }}>
-                    <View style={[styles.card, { backgroundColor: card.is_blocked ? '#424242' : (card.type === 'Visa' ? '#1a1a1a' : '#283593') }]}>
-                        <View style={styles.cardTop}>
-                            <Text style={styles.cardName}>{card.is_blocked ? 'ЗАБЛОКИРОВАНА 🔒' : 'Belly Card'}</Text>
-                            <MaterialCommunityIcons name="credit-card-chip" size={30} color="#fff" />
+                    <LinearGradient 
+                        // Исправление: as const для цветов карточки
+                        colors={card.is_blocked ? ['#424242', '#212121'] as const : ['#303F9F', '#1A237E'] as const} 
+                        start={{x:0, y:0}} end={{x:1, y:1}}
+                        style={styles.card}
+                    >
+                        {/* Верх: Название и PayWave */}
+                        <View style={styles.cardHeader}>
+                            <Text style={styles.cardBankName}>BELLY BANK</Text>
+                            <MaterialCommunityIcons name="contactless-payment" size={28} color="rgba(255,255,255,0.8)" />
                         </View>
-                        <View style={styles.cardMiddle}>
+                        
+                        {/* Середина: Номер карты (Крупно) */}
+                        <View style={styles.cardNumberContainer}>
                             <Text style={styles.cardNumber}>
-                                {card.card_number ? card.card_number.toString().replace(/(\d{4})/g, '$1 ').trim() : '****'}
+                                {card.card_number ? card.card_number.toString().replace(/(\d{4})/g, '$1  ').trim() : '**** **** **** ****'}
                             </Text>
                         </View>
-                        <View style={styles.cardBottom}>
-                            <Text style={styles.cardBalanceLabel}>Баланс</Text>
-                            <Text style={styles.cardBalance}>{Number(card.balance).toLocaleString()} {card.currency}</Text>
+
+                        {/* Низ: Баланс и Логотип Visa */}
+                        <View style={styles.cardFooter}>
+                            <View>
+                                <Text style={styles.cardLabel}>БАЛАНС</Text>
+                                <Text style={styles.cardBalance}>{Number(card.balance).toLocaleString()} ₸</Text>
+                            </View>
+                            <Text style={{color:'white', fontWeight:'bold', fontStyle:'italic', fontSize: 24}}>VISA</Text>
                         </View>
-                        {card.is_blocked && <View style={styles.blockedOverlay}><MaterialCommunityIcons name="lock" size={50} color="rgba(255,255,255,0.5)" /></View>}
-                    </View>
+
+                        {card.is_blocked && (
+                            <View style={styles.blockedOverlay}>
+                                <MaterialCommunityIcons name="lock" size={40} color="#fff" />
+                                <Text style={{color:'white', fontWeight:'bold', marginTop:5}}>Заблокирована</Text>
+                            </View>
+                        )}
+                    </LinearGradient>
                 </TouchableOpacity>
             ))}
 
             <TouchableOpacity style={styles.addCardBtn} onPress={handleCreateCard}>
-                <MaterialCommunityIcons name="plus" size={30} color={theme.colors.onSurface} />
-                <Text style={{ color: theme.colors.onSurface, marginTop: 5 }}>Открыть</Text>
+                <MaterialCommunityIcons name="plus" size={30} color="#888" />
+                <Text style={{ color: '#888', marginTop: 5, fontSize: 12 }}>Открыть</Text>
             </TouchableOpacity>
             </ScrollView>
 
+            {/* 5. 3D КНОПКИ */}
             <View style={styles.actionsContainer}>
             {quickActions.map((action, index) => (
                 <TouchableOpacity key={index} style={styles.actionBtn} onPress={() => router.push(action.route as any)}>
-                {/* Исправленный стиль: явно задаем размеры и центровку */}
-                <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
-                    <MaterialCommunityIcons name={action.icon} size={32} color={action.color} />
-                </View>
-                <Text style={[styles.actionLabel, { color: theme.colors.onBackground }]}>{action.label}</Text>
+                    <LinearGradient 
+                        colors={action.colors} 
+                        style={styles.actionIcon}
+                        start={{x:0, y:0}} end={{x:1, y:1}}
+                    >
+                        <MaterialCommunityIcons name={action.icon} size={28} color="white" />
+                    </LinearGradient>
+                    <Text style={styles.actionLabel}>{action.label}</Text>
                 </TouchableOpacity>
             ))}
             </View>
 
+            {/* 6. ТРАНЗАКЦИИ */}
             <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>Последние операции</Text>
-            {transactions.length === 0 && (
-                <Text style={{color: '#888', fontStyle: 'italic'}}>Операций пока нет</Text>
-            )}
-            {transactions.map((t) => (
-                <View key={t.id} style={[styles.transaction, { backgroundColor: theme.colors.elevation.level1 }]}>
-                    <Avatar.Icon 
-                        size={40} 
-                        icon={t.icon || 'credit-card-outline'} 
-                        style={{ backgroundColor: theme.colors.elevation.level3 }} 
-                        color={theme.colors.primary} 
-                    />
-                    <View style={{ flex: 1, marginLeft: 15 }}>
-                        <Text style={[styles.tName, { color: theme.colors.onBackground }]}>
-                            {t.title || t.category || "Транзакция"}
-                        </Text>
-                        <Text style={{ color: '#888', fontSize: 12 }}>
-                            {t.created_at ? t.created_at.slice(0,10) : t.date}
-                        </Text>
-                    </View>
-                    <Text style={{ fontWeight: 'bold', fontSize: 16, color: t.amount > 0 ? '#4caf50' : theme.colors.onBackground }}>
-                        {t.amount > 0 ? '+' : ''} {t.amount} ₸
-                    </Text>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Последние операции</Text>
+                    <TouchableOpacity onPress={() => router.push('/history')}><Text style={{color: theme.colors.primary, fontWeight:'600'}}>Все</Text></TouchableOpacity>
                 </View>
-            ))}
+                
+                {transactions.length === 0 && <Text style={{color:'#999', paddingVertical:10}}>Нет операций</Text>}
+
+                {transactions.slice(0, 5).map((t) => (
+                    <TouchableOpacity key={t.id} style={styles.transactionRow}>
+                        <View style={[styles.transactionIconBg, {backgroundColor: t.type === 'income' ? '#E8F5E9' : '#EDE7F6'}]}>
+                            <MaterialCommunityIcons 
+                                name={t.icon} 
+                                size={24} 
+                                color={t.type === 'income' ? '#4CAF50' : '#673AB7'} 
+                            />
+                        </View>
+                        <View style={styles.transactionInfo}>
+                            <Text style={styles.transactionTitle}>{t.title || t.category || "Перевод"}</Text>
+                            <Text style={styles.transactionDate}>{t.created_at ? t.created_at.slice(0,10) : t.date}</Text>
+                        </View>
+                        <Text style={[styles.transactionAmount, { color: t.type === 'income' ? '#4CAF50' : '#333' }]}>
+                            {t.type === 'income' ? '+' : ''} {Math.abs(t.amount).toLocaleString()} ₸
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
         </ScrollView>
 
-        {/* --- ГЛАВНОЕ ИСПРАВЛЕНИЕ: Разделение логики для Web и Native --- */}
-        {Platform.OS === 'web' ? (
-            // НА WEB: Обычное View (Оверлей) - никаких aria-hidden ошибок!
-            cardModalVisible && (
-                <View style={[styles.modalOverlay, StyleSheet.absoluteFill, { zIndex: 1000, position: 'fixed' as any }]}>
-                    {renderModalContent()}
+        {/* МОДАЛКА УПРАВЛЕНИЯ КАРТОЙ */}
+        <Modal visible={cardModalVisible} transparent={true} animationType="fade" onRequestClose={() => setCardModalVisible(false)}>
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>Карта *{selectedCard?.card_number?.slice(-4)}</Text>
+                    <Text style={{color:'#666', marginBottom:20, textAlign:'center'}}>
+                        {selectedCard?.is_blocked ? "Карта заблокирована. Операции недоступны." : "Вы можете временно заблокировать карту, если потеряли её."}
+                    </Text>
+
+                    <Button
+                        mode="contained"
+                        icon={selectedCard?.is_blocked ? "lock-open" : "lock"}
+                        buttonColor={selectedCard?.is_blocked ? "#4caf50" : "#f44336"}
+                        onPress={toggleBlockCard}
+                        loading={actionLoading}
+                        style={{marginBottom: 10, width:'100%'}}
+                        contentStyle={{height: 50}}
+                    >
+                        {selectedCard?.is_blocked ? "Разблокировать" : "Заблокировать"}
+                    </Button>
+
+                    <Button mode="outlined" onPress={() => setCardModalVisible(false)} style={{width:'100%'}}>Закрыть</Button>
                 </View>
-            )
-        ) : (
-            // НА ТЕЛЕФОНЕ: Нативный Modal
-            <Modal 
-                visible={cardModalVisible} 
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setCardModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    {renderModalContent()}
-                </View>
-            </Modal>
-        )}
+            </View>
+        </Modal>
 
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 50 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20 },
-  totalBalance: { paddingHorizontal: 20, marginBottom: 20 },
-  cardsScroll: { paddingLeft: 20, paddingRight: 20 },
-  card: { width: width * 0.8, height: 180, borderRadius: 20, padding: 20, marginRight: 15, justifyContent: 'space-between', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8, overflow: 'hidden' },
-  blockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardName: { color: 'rgba(255,255,255,0.8)', fontSize: 14, textTransform: 'uppercase' },
-  cardMiddle: { alignItems: 'flex-start' },
-  cardNumber: { color: '#fff', fontSize: 22, letterSpacing: 2, fontFamily: 'monospace' },
-  cardBottom: {},
-  cardBalanceLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10 },
-  cardBalance: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
-  addCardBtn: { width: 80, height: 180, borderRadius: 20, borderStyle: 'dashed', borderWidth: 1, borderColor: '#888', justifyContent: 'center', alignItems: 'center', marginRight: 20 },
-  actionsContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 30, marginBottom: 20 },
+  container: { flex: 1 },
+  centerLoader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15, marginTop: 10 },
+  greetingText: { color: '#888', fontSize: 14 },
+  userNameText: { color: '#333', fontSize: 26, fontWeight: 'bold' },
+  avatarContainer: { elevation: 5, shadowColor:'#000', shadowOpacity:0.1, shadowRadius:5, borderRadius: 24 },
+
+  // Stories
+  storiesContainer: { paddingLeft: 20, marginBottom: 25 },
+  storyItem: { alignItems: 'center', marginRight: 15, width: 75 },
+  storyCircle: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 6, elevation: 4 },
+  storyText: { fontSize: 11, textAlign: 'center', color: '#444' },
+
+  // Balance
+  balanceContainer: { paddingHorizontal: 20, marginBottom: 25 },
+  balanceLabel: { color: '#666', fontSize: 15 },
+  balanceValue: { fontSize: 36, fontWeight: 'bold', color: '#111', marginTop: 5 },
+
+  // Cards
+  cardsScroll: { paddingLeft: 20, paddingRight: 20, marginBottom: 30 },
+  card: { 
+      width: width * 0.85, 
+      height: 220, 
+      borderRadius: 24, 
+      padding: 25, 
+      marginRight: 15, 
+      justifyContent: 'space-between', 
+      elevation: 12, 
+      shadowColor: "#1A237E", 
+      shadowOffset: { width: 0, height: 8 }, 
+      shadowOpacity: 0.4, 
+      shadowRadius: 10 
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardBankName: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+  
+  cardNumberContainer: { justifyContent: 'center', flex: 1 },
+  cardNumber: { color: '#fff', fontSize: 24, letterSpacing: 2, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 2 },
+  
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  cardLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, textTransform: 'uppercase', marginBottom: 2 },
+  cardBalance: { color: '#fff', fontSize: 26, fontWeight: 'bold' }, 
+  
+  blockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  addCardBtn: { width: 60, height: 220, borderRadius: 24, borderStyle: 'dashed', borderWidth: 2, borderColor: '#ccc', justifyContent: 'center', alignItems: 'center', marginRight: 20, backgroundColor: 'rgba(255,255,255,0.5)' },
+
+  // Actions
+  actionsContainer: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 35 },
   actionBtn: { alignItems: 'center', width: '22%' },
-  actionIcon: { width: 65, height: 65, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  actionLabel: { fontSize: 12, fontWeight: '600' },
-  section: { paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
-  transaction: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 16, marginBottom: 10 },
-  tName: { fontSize: 16, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20, top: 0, left: 0, right: 0, bottom: 0 },
-  modalContent: { padding: 20, borderRadius: 20, width: '100%', maxWidth: 400, elevation: 5 }
+  actionIcon: { width: 64, height: 64, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  actionLabel: { fontSize: 12, fontWeight: '600', color: '#444' },
+
+  // Transactions
+  section: { paddingHorizontal: 20, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 30, paddingBottom: 50, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 5 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#222' },
+  
+  transactionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+  transactionIconBg: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  transactionInfo: { flex: 1 },
+  transactionTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
+  transactionDate: { fontSize: 12, color: '#999', marginTop: 3 },
+  transactionAmount: { fontSize: 16, fontWeight: 'bold' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: 'white', borderRadius: 24, padding: 25, width: '100%', maxWidth: 350, alignItems: 'center', elevation: 10 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 }
 });
