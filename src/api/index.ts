@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 // ⚠️ ВАЖНО: Убедитесь, что URL правильный (ngrok или IP)
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bank-super-app-production.up.railway.app/';
+const BASE_URL = 'http://172.20.10.8:8000';
 
 export const api = axios.create({
   baseURL: BASE_URL,
