@@ -2,8 +2,8 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// ⚠️ ВАЖНО: Убедитесь, что URL правильный (ngrok или IP)
-const BASE_URL = 'http://172.20.10.8:8000';
+//ВАЖНО: Убедитесь, что URL правильный (ngrok или IP)
+const BASE_URL = 'http://localhost:8000';
 
 export const api = axios.create({
   baseURL: BASE_URL,
