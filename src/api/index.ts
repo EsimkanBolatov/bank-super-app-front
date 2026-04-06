@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 //ВАЖНО: Убедитесь, что URL правильный (ngrok или IP)
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const api = axios.create({
   baseURL: BASE_URL,
