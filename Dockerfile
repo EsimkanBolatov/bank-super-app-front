@@ -1,14 +1,14 @@
 # my-bank-main/Dockerfile
-FROM node:18-alpine
+FROM node:20.19-alpine
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-RUN npm install --legacy-peer-deps
-
-# Принудительно ставим react и react-dom версии 19.1.0
-RUN npm install react@19.1.0 react-dom@19.1.0 react-native-web @expo/metro-runtime --legacy-peer-deps
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm ci --legacy-peer-deps
 COPY . .
 
 # Обычно React/Vite используют порт 3000 или 5173. Проверьте ваш package.json -> scripts
