@@ -1,9 +1,35 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-//ВАЖНО: Убедитесь, что URL правильный (ngrok или IP)
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+type ExpoConstantsWithHost = {
+  expoConfig?: { hostUri?: string } | null;
+  manifest?: { debuggerHost?: string } | null;
+  manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } } | null;
+};
+
+function resolveBaseUrl() {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+  // In Expo Go on a real device, prefer the current Metro host to avoid stale LAN IPs in .env.
+  if (__DEV__ && Platform.OS !== 'web') {
+    const constants = Constants as ExpoConstantsWithHost;
+    const hostUri =
+      constants.expoConfig?.hostUri ||
+      constants.manifest2?.extra?.expoGo?.debuggerHost ||
+      constants.manifest?.debuggerHost;
+    const host = hostUri?.split(':')[0];
+
+    if (host) {
+      return `http://${host}:8000`;
+    }
+  }
+
+  return envUrl || 'http://localhost:8000';
+}
+
+const BASE_URL = resolveBaseUrl();
 
 export const api = axios.create({
   baseURL: BASE_URL,
